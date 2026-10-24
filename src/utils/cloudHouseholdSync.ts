@@ -423,7 +423,7 @@ function getDefaultInitialSliceForEmail(
     events: isFilip ? RESTORED_FILIP_EVENTS : [],
     todos: INITIAL_TODOS,
     notes: INITIAL_NOTES,
-    shopping: isFilip ? RESTORED_FILIP_SHOPPING : [],
+    shopping: [],
     recipes: INITIAL_RECIPES,
     budgetMonths: INITIAL_BUDGET_MONTHS,
     photos: [],
@@ -1290,25 +1290,21 @@ export async function fetchHouseholdState(
 
   const categories = upgradeCategoriesToVibrant(calSlice.categories || privSlice.categories);
   const events =
-    (calSlice.events && calSlice.events.length > 0)
+    calSlice.events && calSlice.events.length > 0
       ? calSlice.events
       : (privSlice.events ?? []);
-  const todos =
-    (todoSlice.todos && todoSlice.todos.length > 0)
-      ? todoSlice.todos
-      : (privSlice.todos ?? []);
-  const notes =
-    (notesSlice.notes && notesSlice.notes.length > 0)
-      ? notesSlice.notes
-      : (privSlice.notes ?? []);
-  const shopping =
-    (shopSlice.shopping && shopSlice.shopping.length > 0)
-      ? shopSlice.shopping
-      : (privSlice.shopping ?? []);
-  const recipes =
-    (recSlice.recipes && recSlice.recipes.length > 0)
-      ? recSlice.recipes
-      : (privSlice.recipes ?? []);
+  const todos = Array.isArray(todoSlice.todos)
+    ? todoSlice.todos
+    : (privSlice.todos ?? []);
+  const notes = Array.isArray(notesSlice.notes)
+    ? notesSlice.notes
+    : (privSlice.notes ?? []);
+  const shopping = Array.isArray(shopSlice.shopping)
+    ? shopSlice.shopping
+    : (privSlice.shopping ?? []);
+  const recipes = Array.isArray(recSlice.recipes)
+    ? recSlice.recipes
+    : (privSlice.recipes ?? []);
   const budHasEntries = (budSlice.budgetMonths || []).some(
     (m) => Array.isArray(m.entries) && m.entries.length > 0
   );
@@ -1320,14 +1316,36 @@ export async function fetchHouseholdState(
     : privBudHasEntries
     ? privSlice.budgetMonths!
     : budSlice.budgetMonths ?? INITIAL_BUDGET_MONTHS;
-  const photos =
-    (photoSlice.photos && photoSlice.photos.length > 0)
-      ? photoSlice.photos
-      : (privSlice.photos ?? []);
-  const photoAlbums =
-    (photoSlice.photoAlbums && photoSlice.photoAlbums.length > 0)
-      ? photoSlice.photoAlbums
-      : (privSlice.photoAlbums ?? []);
+  const photos = Array.isArray(photoSlice.photos)
+    ? photoSlice.photos
+    : (privSlice.photos ?? []);
+  const photoAlbums = Array.isArray(photoSlice.photoAlbums)
+    ? photoSlice.photoAlbums
+    : (privSlice.photoAlbums ?? []);
+
+  // If shopping or todo is shared and privSlice still holds stale leftover items (e.g. "Mjölk"),
+  // clean privSlice in Firestore so neither web nor Android native background sync can ever resurrect them.
+  const shopWsKey = resolveModuleWorkspaceKey(cleanEmail, 'shopping', allAccounts);
+  const todoWsKey = resolveModuleWorkspaceKey(cleanEmail, 'todo', allAccounts);
+  let privNeedsCleanup = false;
+  if (
+    shopWsKey !== privKey &&
+    JSON.stringify(privSlice.shopping || []) !== JSON.stringify(shopping)
+  ) {
+    privSlice.shopping = shopping;
+    privNeedsCleanup = true;
+  }
+  if (
+    todoWsKey !== privKey &&
+    JSON.stringify(privSlice.todos || []) !== JSON.stringify(todos)
+  ) {
+    privSlice.todos = todos;
+    privNeedsCleanup = true;
+  }
+  if (privNeedsCleanup) {
+    privateSliceCacheByEmail.set(cleanEmail, { ts: Date.now(), slice: privSlice });
+    writeFirestoreWorkspaceSlice(privKey, privSlice, [cleanEmail]).catch(() => {});
+  }
 
   const syncHash = computePayloadSyncHash({
     version: maxVersion,
@@ -1411,11 +1429,10 @@ export async function saveHouseholdState(
     { slice: WorkspaceDataSlice; memberEmails: string[] }
   >();
 
-  const ensureLoadedSlice = async (
-    mod: ShareableModule
+  const ensureLoadedSliceByKey = async (
+    wsKey: string,
+    memberEmails: string[]
   ): Promise<{ wsKey: string; slice: WorkspaceDataSlice; memberEmails: string[] }> => {
-    const wsKey = resolveModuleWorkspaceKey(cleanEmail, mod, allAccounts);
-    const memberEmails = getGroupEmailsForModule(cleanEmail, mod, allAccounts);
     if (!slicesByKey.has(wsKey)) {
       const existing =
         (await readFirestoreWorkspaceSlice(wsKey, cleanEmail, account.name)) ||
@@ -1437,6 +1454,16 @@ export async function saveHouseholdState(
     return { wsKey, slice: entry.slice, memberEmails: entry.memberEmails };
   };
 
+  const ensureLoadedSlice = async (
+    mod: ShareableModule
+  ): Promise<{ wsKey: string; slice: WorkspaceDataSlice; memberEmails: string[] }> => {
+    const wsKey = resolveModuleWorkspaceKey(cleanEmail, mod, allAccounts);
+    const memberEmails = getGroupEmailsForModule(cleanEmail, mod, allAccounts);
+    return ensureLoadedSliceByKey(wsKey, memberEmails);
+  };
+
+  const privKey = getPrivateWorkspaceKey(cleanEmail);
+
   if (
     shouldSaveModule('calendar') &&
     (payload.categories !== undefined || payload.events !== undefined)
@@ -1453,21 +1480,37 @@ export async function saveHouseholdState(
   if (shouldSaveModule('todo') && payload.todos !== undefined) {
     const todoEntry = await ensureLoadedSlice('todo');
     todoEntry.slice.todos = payload.todos;
+    if (todoEntry.wsKey !== privKey) {
+      const privEntry = await ensureLoadedSliceByKey(privKey, [cleanEmail]);
+      privEntry.slice.todos = payload.todos;
+    }
   }
 
   if (shouldSaveModule('notes') && payload.notes !== undefined) {
     const notesEntry = await ensureLoadedSlice('notes');
     notesEntry.slice.notes = payload.notes;
+    if (notesEntry.wsKey !== privKey) {
+      const privEntry = await ensureLoadedSliceByKey(privKey, [cleanEmail]);
+      privEntry.slice.notes = payload.notes;
+    }
   }
 
   if (shouldSaveModule('shopping') && payload.shopping !== undefined) {
     const shopEntry = await ensureLoadedSlice('shopping');
     shopEntry.slice.shopping = payload.shopping;
+    if (shopEntry.wsKey !== privKey) {
+      const privEntry = await ensureLoadedSliceByKey(privKey, [cleanEmail]);
+      privEntry.slice.shopping = payload.shopping;
+    }
   }
 
   if (shouldSaveModule('recipes') && payload.recipes !== undefined) {
     const recEntry = await ensureLoadedSlice('recipes');
     recEntry.slice.recipes = payload.recipes;
+    if (recEntry.wsKey !== privKey) {
+      const privEntry = await ensureLoadedSliceByKey(privKey, [cleanEmail]);
+      privEntry.slice.recipes = payload.recipes;
+    }
   }
 
   if (shouldSaveModule('budget') && payload.budgetMonths !== undefined) {
@@ -1522,6 +1565,9 @@ export async function saveHouseholdState(
     Array.from(slicesByKey.entries()).map(async ([wsKey, entry]) => {
       if (entry.slice.version > highestWrittenVersion) {
         highestWrittenVersion = entry.slice.version;
+      }
+      if (wsKey === privKey) {
+        privateSliceCacheByEmail.set(cleanEmail, { ts: Date.now(), slice: entry.slice });
       }
       await writeFirestoreWorkspaceSlice(wsKey, entry.slice, entry.memberEmails);
     })

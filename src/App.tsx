@@ -1487,29 +1487,6 @@ export default function App() {
             (typeof data.version === 'number' &&
               data.version > lastSyncedVersionRef.current))
         ) {
-          if (localStorage.getItem('vn_rescued_run35_shop_v1') !== 'true') {
-            localStorage.setItem('vn_rescued_run35_shop_v1', 'true');
-            const localShop = loadFromStorage<ShoppingItem[]>('vn_shopping_v2', []);
-            if (localShop.length > 0 && (!data.shopping || data.shopping.length === 0)) {
-              try {
-                const newVer = await saveHouseholdState(
-                  {
-                    updatedBy: memberName,
-                    lastActionSummary: `Lade till ${localShop[0].name} (${localShop[0].amount || 1} ${localShop[0].unit || 'st'}) i inköpslistan`,
-                    lastActionType: 'shopping',
-                    shopping: localShop,
-                  },
-                  data.version || lastSyncedVersionRef.current,
-                  currentAccount.email,
-                  ['shopping']
-                );
-                data.version = newVer;
-                data.shopping = localShop;
-              } catch {
-                // Ignore if offline
-              }
-            }
-          }
           if (typeof data.version === 'number') {
             lastSyncedVersionRef.current = data.version;
           }
@@ -1965,28 +1942,6 @@ export default function App() {
       try {
         const shared = await fetchHouseholdState(targetEmail);
         if (shared && shared.initialized) {
-          if (localStorage.getItem('vn_rescued_run35_shop_v1') !== 'true') {
-            localStorage.setItem('vn_rescued_run35_shop_v1', 'true');
-            const localShop = loadFromStorage<ShoppingItem[]>('vn_shopping_v2', []);
-            if (localShop.length > 0 && (!shared.shopping || shared.shopping.length === 0)) {
-              try {
-                const newVer = await saveHouseholdState(
-                  {
-                    updatedBy: memberName,
-                    lastActionSummary: `Lade till ${localShop[0].name} (${localShop[0].amount || 1} ${localShop[0].unit || 'st'}) i inköpslistan`,
-                    lastActionType: 'shopping',
-                    shopping: localShop,
-                  },
-                  shared.version || lastSyncedVersionRef.current,
-                  targetEmail
-                );
-                shared.version = newVer;
-                shared.shopping = localShop;
-              } catch {
-                // Ignore if offline
-              }
-            }
-          }
           if (typeof shared.version === 'number') {
             lastSyncedVersionRef.current = shared.version;
           }

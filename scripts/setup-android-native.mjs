@@ -705,11 +705,11 @@ public class HemSyncService extends Service {
                         boolean isSharedDoc = docId.startsWith("shared_");
 
                         JSONArray sArr = slice.optJSONArray("shopping");
-                        if (sArr != null && (bestShopping == null || (sArr.length() > 0 && (isSharedDoc || bestShopping.length() == 0)))) {
+                        if (sArr != null && (bestShopping == null || isSharedDoc)) {
                             bestShopping = sArr;
                         }
                         JSONArray tArr = slice.optJSONArray("todos");
-                        if (tArr != null && (bestTodos == null || (tArr.length() > 0 && (isSharedDoc || bestTodos.length() == 0)))) {
+                        if (tArr != null && (bestTodos == null || isSharedDoc)) {
                             bestTodos = tArr;
                         }
                         JSONArray eArr = slice.optJSONArray("events");
