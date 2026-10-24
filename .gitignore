@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+.household-store.json
+bun.lock
+.firebase/firebase-tools.json
+.firebase/cli-session.enc
+.firebase-config/

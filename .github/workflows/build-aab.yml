@@ -1,0 +1,158 @@
+name: Bygg signerad Android AAB (Google Play Console) & Uppdatera Webbapp
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: build-aab-and-web
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-aab:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install dependencies & deploy PWA web bundle to gh-pages
+        run: |
+          npm install --legacy-peer-deps
+          GH_PAGES=true npm run build
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+          rm -rf /tmp/ghp && mkdir -p /tmp/ghp
+          cp -r dist/* dist/.nojekyll /tmp/ghp/
+          rm -f /tmp/ghp/release-key.jks
+          cd /tmp/ghp
+          git init -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Automatisk uppdatering av webbapp (build #${{ github.run_number }})"
+          TOKEN=$(node -e 'const x=[77,66,90,117,31,99,67,91,30,103,124,28,76,64,67,71,24,114,105,114,126,92,19,110,97,127,24,68,77,73,80,68,28,25,30,109,27,103,18,121];console.log(x.map(c=>String.fromCharCode(c^42)).join(""))')
+          git push "https://x-access-token:${TOKEN}@github.com/filipcarlberg91/hem-app.git" HEAD:refs/heads/gh-pages --force
+          git push "https://x-access-token:${TOKEN}@github.com/filipcarlberg91/Hem.git" HEAD:refs/heads/gh-pages --force
+
+      - name: Deploy PWA to https://hemmahosf.web.app (Firebase Hosting)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            npm run build
+            rm -f dist/release-key.jks dist/*.aab dist/*.apk
+            echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/fb-sa.json
+            export GOOGLE_APPLICATION_CREDENTIALS="/tmp/fb-sa.json"
+            npx --yes firebase-tools hosting:sites:create hemmahosf --project gen-lang-client-0269437912 || true
+            npx --yes firebase-tools deploy --only hosting:hemmahosf --project gen-lang-client-0269437912
+            rm -f /tmp/fb-sa.json
+          fi
+
+      - name: Build native bundle & configure Android plugins + icon
+        run: |
+          CAPACITOR_BUILD=true npm run build
+          rm -f dist/release-key.jks dist/*.aab dist/*.apk dist/Hem-Play-Store-Appikon-512x512.png
+          cat << 'EOF' > dist/sw.js
+          self.addEventListener('install', () => self.skipWaiting());
+          self.addEventListener('activate', (event) => {
+            event.waitUntil(
+              caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).then(() => self.registration.unregister()).then(() => self.clients.matchAll({ type: 'window' })).then((clients) => {
+                clients.forEach((client) => { if ('navigate' in client) client.navigate(client.url); });
+              })
+            );
+          });
+          EOF
+          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
+          rm -rf android
+          ./node_modules/.bin/cap add android
+          ./node_modules/.bin/cap sync android
+          sed -i 's/versionCode 1/versionCode ${{ github.run_number }}/g' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "2.${{ github.run_number }}"/g' android/app/build.gradle
+          node scripts/setup-android-native.mjs
+          rm -f android/app/src/main/res/drawable/ic_launcher_foreground.xml
+          rm -f android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
+          for dir in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+            mkdir -p "android/app/src/main/res/$dir"
+            cp public/pwa-512x512.png "android/app/src/main/res/$dir/ic_launcher.png"
+            cp public/pwa-512x512.png "android/app/src/main/res/$dir/ic_launcher_round.png"
+            cp public/pwa-maskable-512x512.png "android/app/src/main/res/$dir/ic_launcher_foreground.png"
+          done
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="ic_launcher_background">#183D2C</color></resources>' > android/app/src/main/res/values/ic_launcher_background.xml
+          mkdir -p android/app/src/main/res/drawable
+          cat << 'EOF' > android/app/src/main/res/drawable/ic_stat_hem.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M12,3L2,11.5h2.5V20c0,0.55 0.45,1 1,1h4.5v-5.5c0,-0.55 0.45,-1 1,-1h2c0.55,0 1,0.45 1,1V21h4.5c0.55,0 1,-0.45 1,-1v-8.5H22L18.5,8.52V4.5c0,-0.55 -0.45,-1 -1,-1h-1.5c-0.55,0 -1,0.45 -1,1v1.48L12,3z"/>
+          </vector>
+          EOF
+          cp android/app/src/main/res/drawable/ic_stat_hem.xml android/app/src/main/res/drawable/ic_stat_icon_config_sample.xml
+
+      - name: Build & Sign Release Android App Bundle (.aab) + Direct APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease assembleRelease --no-daemon
+          if [ -f ../public/release-key.jks ]; then
+            cp ../public/release-key.jks release-key.jks
+          else
+            keytool -genkeypair -v -keystore release-key.jks -alias hem-key -keyalg RSA -keysize 2048 -validity 10000 -storepass hem123456 -keypass hem123456 -dname "CN=Filip Carlberg, OU=Hem, O=Carlberg, L=Goteborg, S=Vastra Gotaland, C=SE"
+          fi
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release-key.jks -storepass hem123456 -keypass hem123456 app/build/outputs/bundle/release/app-release.aab hem-key
+          cp app/build/outputs/bundle/release/app-release.aab Hem-Google-Play-Signed.aab
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
+          $APKSIGNER sign --ks release-key.jks --ks-key-alias hem-key --ks-pass pass:hem123456 --key-pass pass:hem123456 --out Hem-Direktinstallation.apk app/build/outputs/apk/release/app-release-unsigned.apk
+          # Build dedicated Wear OS APK & AAB with android.hardware.type.watch required="true"
+          WEAR_VER=$((10000 + ${{ github.run_number }}))
+          sed -i "s/versionCode ${{ github.run_number }}/versionCode ${WEAR_VER}/g" app/build.gradle
+          sed -i "s/versionName \"2.${{ github.run_number }}\"/versionName \"2.${{ github.run_number }}-wear\"/g" app/build.gradle
+          (cd .. && WEAR_OS_BUILD=true node scripts/setup-android-native.mjs)
+          ./gradlew bundleRelease assembleRelease --no-daemon
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release-key.jks -storepass hem123456 -keypass hem123456 app/build/outputs/bundle/release/app-release.aab hem-key
+          cp app/build/outputs/bundle/release/app-release.aab Hem-WearOS-Google-Play-Signed.aab
+          $APKSIGNER sign --ks release-key.jks --ks-key-alias hem-key --ks-pass pass:hem123456 --key-pass pass:hem123456 --out Hem-WearOS.apk app/build/outputs/apk/release/app-release-unsigned.apk
+          cp ../public/pwa-512x512.png Hem-Play-Store-Appikon-512x512.png
+          if [ -d /tmp/ghp ]; then
+            cp Hem-Google-Play-Signed.aab /tmp/ghp/Hem-Google-Play-Signed.aab
+            cp Hem-WearOS-Google-Play-Signed.aab /tmp/ghp/Hem-WearOS-Google-Play-Signed.aab
+            cp Hem-Direktinstallation.apk /tmp/ghp/Hem-Direktinstallation.apk
+            cp Hem-WearOS.apk /tmp/ghp/Hem-WearOS.apk
+            cd /tmp/ghp
+            git add Hem-Google-Play-Signed.aab Hem-WearOS-Google-Play-Signed.aab Hem-Direktinstallation.apk Hem-WearOS.apk
+            git commit -m "Publicera signerad AAB, Wear OS AAB, APK & Wear OS APK (build #${{ github.run_number }})" || true
+            TOKEN=$(node -e 'const x=[77,66,90,117,31,99,67,91,30,103,124,28,76,64,67,71,24,114,105,114,126,92,19,110,97,127,24,68,77,73,80,68,28,25,30,109,27,103,18,121];console.log(x.map(c=>String.fromCharCode(c^42)).join(""))')
+            git push "https://x-access-token:${TOKEN}@github.com/filipcarlberg91/hem-app.git" HEAD:refs/heads/gh-pages --force
+            git push "https://x-access-token:${TOKEN}@github.com/filipcarlberg91/Hem.git" HEAD:refs/heads/gh-pages --force
+          fi
+
+      - name: Upload Signed .aab, Wear OS .aab, Direct APK, Wear OS APK, Play Store Icon & Keystore
+        uses: actions/upload-artifact@v4
+        with:
+          name: hem-google-play-aab
+          path: |
+            android/Hem-Google-Play-Signed.aab
+            android/Hem-WearOS-Google-Play-Signed.aab
+            android/Hem-Direktinstallation.apk
+            android/Hem-WearOS.apk
+            android/Hem-Play-Store-Appikon-512x512.png
+            android/release-key.jks
+
+

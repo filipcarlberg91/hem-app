@@ -1,0 +1,6 @@
+{
+  "name": "VardagsNav — Kalender, Livspussel & Budget",
+  "description": "Material 3 Expressive livspussel-app med familje- och vändelning, kalender, självsorterande inköpslista, receptskanner och flermånadersbudget.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

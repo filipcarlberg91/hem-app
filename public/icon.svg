@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E4B35" />
+      <stop offset="100%" stop-color="#112C1F" />
+    </linearGradient>
+    <linearGradient id="roofGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A6F2C6" />
+      <stop offset="100%" stop-color="#76DBA3" />
+    </linearGradient>
+  </defs>
+
+  <!-- Material 3 Expressive Background -->
+  <rect width="512" height="512" rx="120" fill="url(#bgGrad)" />
+
+  <!-- Subtle Nordic Halo Circle -->
+  <circle cx="256" cy="258" r="142" fill="#255940" opacity="0.45" />
+
+  <!-- Scaled & Centered House Artwork (72% scale for Web/In-App header) -->
+  <g transform="translate(256, 260) scale(0.72) translate(-256, -268)">
+    <!-- Chimney -->
+    <rect x="332" y="114" width="36" height="68" rx="12" fill="#FCE8D5" />
+
+    <!-- House Body -->
+    <path
+      d="M124 236 L256 126 L388 236 V384 C388 401.673 373.673 416 356 416 H156 C138.327 416 124 401.673 124 384 Z"
+      fill="#F6FBF7"
+    />
+
+    <!-- Expressive Pitched Roof Overhang -->
+    <path
+      d="M92 246 L239.5 118.5 C249.0 110.3 263.0 110.3 272.5 118.5 L420 246"
+      fill="none"
+      stroke="url(#roofGrad)"
+      stroke-width="36"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Top-Left: Calendar Tile -->
+    <rect x="166" y="226" width="78" height="72" rx="20" fill="#FCE8D5" />
+    <rect x="182" y="242" width="46" height="12" rx="6" fill="#C86D3B" />
+    <circle cx="192" cy="272" r="7" fill="#C86D3B" />
+    <circle cx="216" cy="272" r="7" fill="#C86D3B" />
+
+    <!-- Top-Right: Todo Checkmark Tile -->
+    <rect x="268" y="226" width="78" height="72" rx="20" fill="#D8F3E3" />
+    <path
+      d="M290 262 L303 275 L326 249"
+      fill="none"
+      stroke="#183D2C"
+      stroke-width="10"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Bottom-Left: Recipes & Shopping Tile -->
+    <rect x="166" y="316" width="78" height="72" rx="20" fill="#EAE2FA" />
+    <path
+      d="M190 346 H220 L215 370 H195 Z"
+      fill="#5C4389"
+    />
+    <path
+      d="M196 346 C196 336 214 336 214 346"
+      fill="none"
+      stroke="#5C4389"
+      stroke-width="6"
+      stroke-linecap="round"
+    />
+
+    <!-- Bottom-Right: Notes & Budget Tile -->
+    <rect x="268" y="316" width="78" height="72" rx="20" fill="#D6EEF8" />
+    <rect x="286" y="338" width="42" height="8" rx="4" fill="#1D5B79" />
+    <rect x="286" y="354" width="28" height="8" rx="4" fill="#1D5B79" />
+  </g>
+</svg>

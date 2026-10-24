@@ -1,0 +1,437 @@
+@import "tailwindcss";
+
+@layer base {
+  :root,
+  [data-theme="forest"] {
+    --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Primary (Skogsgrön) */
+    --m3-primary: #183D2C;
+    --m3-primary-hover: #0F291E;
+    --m3-on-primary-muted: #CDE8D8;
+    --m3-accent: #A6F2C6;
+    --m3-accent-hover: #8CE6B4;
+    --m3-on-accent: #082114;
+    --m3-surface: #F6FBF7;
+    --m3-surface-tint: #E4F3EA;
+    --m3-container: #D8F3E3;
+    --m3-container-soft: #E7F3EC;
+    --m3-border: #D8E6DD;
+    --m3-border-strong: #CDE0D4;
+    --m3-text: #141E18;
+    --m3-text-muted: #54685C;
+
+    /* Android 16/17 Secondary (Varm Korall / Bärnsten) */
+    --m3-secondary: #9A4216;
+    --m3-secondary-container: #FFDBC9;
+    --m3-on-secondary-container: #341100;
+    --m3-secondary-border: #F5BFA3;
+
+    /* Android 16/17 Tertiary (Nordisk Fjordblå) */
+    --m3-tertiary: #1B506B;
+    --m3-tertiary-container: #CBE6FF;
+    --m3-on-tertiary-container: #001E2E;
+    --m3-tertiary-border: #9FD0F7;
+  }
+
+  [data-theme="ocean"] {
+    /* Primary (Västkustblå) */
+    --m3-primary: #143B5D;
+    --m3-primary-hover: #0C263D;
+    --m3-on-primary-muted: #CBE2F6;
+    --m3-accent: #9AD0FF;
+    --m3-accent-hover: #7DC1FF;
+    --m3-on-accent: #061D33;
+    --m3-surface: #F4F8FC;
+    --m3-surface-tint: #E3EFFA;
+    --m3-container: #D4E8FA;
+    --m3-container-soft: #E6F1FA;
+    --m3-border: #D4E2F0;
+    --m3-border-strong: #C2D6EA;
+    --m3-text: #111C26;
+    --m3-text-muted: #4B6075;
+
+    /* Android 16/17 Secondary (Solgul / Ockra) */
+    --m3-secondary: #7A4F00;
+    --m3-secondary-container: #FFDEA6;
+    --m3-on-secondary-container: #271900;
+    --m3-secondary-border: #F2C46D;
+
+    /* Android 16/17 Tertiary (Havskorall / Rosé) */
+    --m3-tertiary: #8A2D4B;
+    --m3-tertiary-container: #FFD9E2;
+    --m3-on-tertiary-container: #3A071A;
+    --m3-tertiary-border: #F7B2C4;
+  }
+
+  [data-theme="terracotta"] {
+    /* Primary (Terrakotta) */
+    --m3-primary: #6E2C1B;
+    --m3-primary-hover: #4F1E12;
+    --m3-on-primary-muted: #F5D5CC;
+    --m3-accent: #FFC2AD;
+    --m3-accent-hover: #FFAD91;
+    --m3-on-accent: #361107;
+    --m3-surface: #FDF7F5;
+    --m3-surface-tint: #FAEDE8;
+    --m3-container: #F9DFD6;
+    --m3-container-soft: #FBECE7;
+    --m3-border: #EDD8D1;
+    --m3-border-strong: #E4C7BE;
+    --m3-text: #241410;
+    --m3-text-muted: #6E524B;
+
+    /* Android 16/17 Secondary (Kontrasterande Salviagrön) */
+    --m3-secondary: #1F563E;
+    --m3-secondary-container: #C4F0D9;
+    --m3-on-secondary-container: #062114;
+    --m3-secondary-border: #96DEC0;
+
+    /* Android 16/17 Tertiary (Gyllene Bärnsten) */
+    --m3-tertiary: #73540E;
+    --m3-tertiary-container: #FFDF9E;
+    --m3-on-tertiary-container: #261A00;
+    --m3-tertiary-border: #EBC471;
+  }
+
+  [data-theme="lavender"] {
+    /* Primary (Ametist) */
+    --m3-primary: #3E276B;
+    --m3-primary-hover: #2A194B;
+    --m3-on-primary-muted: #DFD5F5;
+    --m3-accent: #D7C2FF;
+    --m3-accent-hover: #C5A8FF;
+    --m3-on-accent: #1E0E3D;
+    --m3-surface: #F8F6FC;
+    --m3-surface-tint: #EFEAFA;
+    --m3-container: #E5DCFA;
+    --m3-container-soft: #EFEAFA;
+    --m3-border: #DFD7EE;
+    --m3-border-strong: #D1C5E6;
+    --m3-text: #1A1426;
+    --m3-text-muted: #5C5270;
+
+    /* Android 16/17 Secondary (Pistage / Mint) */
+    --m3-secondary: #195942;
+    --m3-secondary-container: #BCF2DA;
+    --m3-on-secondary-container: #002114;
+    --m3-secondary-border: #8FE0BE;
+
+    /* Android 16/17 Tertiary (Varm Hallon / Korall) */
+    --m3-tertiary: #822651;
+    --m3-tertiary-container: #FFD8E6;
+    --m3-on-tertiary-container: #37071E;
+    --m3-tertiary-border: #F5B0CC;
+  }
+
+  [data-theme="rose"] {
+    /* Primary (Rosé & Bär) */
+    --m3-primary: #6B2146;
+    --m3-primary-hover: #4D1631;
+    --m3-on-primary-muted: #F5CEE1;
+    --m3-accent: #FFB8DA;
+    --m3-accent-hover: #FFA1CE;
+    --m3-on-accent: #380920;
+    --m3-surface: #FDF6FA;
+    --m3-surface-tint: #FAE8F1;
+    --m3-container: #F7D8E8;
+    --m3-container-soft: #FBE9F2;
+    --m3-border: #EED5E2;
+    --m3-border-strong: #E3C1D3;
+    --m3-text: #24121B;
+    --m3-text-muted: #6E4F5E;
+
+    /* Android 16/17 Secondary (Akvamarin / Turkos) */
+    --m3-secondary: #12565E;
+    --m3-secondary-container: #BCEBF2;
+    --m3-on-secondary-container: #001F24;
+    --m3-secondary-border: #8ED8E3;
+
+    /* Android 16/17 Tertiary (Varm Persika / Guld) */
+    --m3-tertiary: #7D4814;
+    --m3-tertiary-container: #FFDBC2;
+    --m3-on-tertiary-container: #2B1700;
+    --m3-tertiary-border: #F2BE96;
+  }
+
+  [data-theme="slate"] {
+    /* Primary (Skiffer) */
+    --m3-primary: #1E293B;
+    --m3-primary-hover: #0F172A;
+    --m3-on-primary-muted: #CBD5E1;
+    --m3-accent: #BAE6FD;
+    --m3-accent-hover: #7DD3FC;
+    --m3-on-accent: #0C1928;
+    --m3-surface: #F8FAFC;
+    --m3-surface-tint: #EEF2F6;
+    --m3-container: #E2E8F0;
+    --m3-container-soft: #F1F5F9;
+    --m3-border: #E2E8F0;
+    --m3-border-strong: #CBD5E1;
+    --m3-text: #0F172A;
+    --m3-text-muted: #475569;
+
+    /* Android 16/17 Secondary (Elektrisk Viol) */
+    --m3-secondary: #4F378B;
+    --m3-secondary-container: #EADDFF;
+    --m3-on-secondary-container: #21005D;
+    --m3-secondary-border: #CFBDFE;
+
+    /* Android 16/17 Tertiary (Arktisk Turkos) */
+    --m3-tertiary: #0F5359;
+    --m3-tertiary-container: #BCEBEF;
+    --m3-on-tertiary-container: #002022;
+    --m3-tertiary-border: #8DD8DF;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--m3-surface);
+    color: var(--m3-text);
+    overflow-x: clip;
+    -webkit-touch-callout: none;
+  }
+
+  button, a, header, nav {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Prevent iOS Safari from auto-zooming when focusing inputs */
+  @media screen and (max-width: 768px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  .font-mono, .tabular-nums {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Dynamic Material 3 Expressive (Android 16/17 Primary + Secondary + Tertiary) Remapping */
+.bg-\[\#183D2C\],
+.bg-\[\#163A2B\] {
+  background-color: var(--m3-primary) !important;
+}
+.bg-\[\#214E3B\],
+.bg-\[\#1E4836\],
+.bg-\[\#102B20\] {
+  background-color: color-mix(in srgb, var(--m3-primary) 82%, white 18%) !important;
+}
+.border-\[\#25543F\],
+.border-\[\#326B52\],
+.border-\[\#2F634C\] {
+  border-color: color-mix(in srgb, var(--m3-primary) 65%, white 35%) !important;
+}
+.hover\:bg-\[\#0F291E\]:hover,
+.hover\:bg-\[\#102A1E\]:hover,
+.hover\:bg-\[\#1E4B38\]:hover {
+  background-color: var(--m3-primary-hover) !important;
+}
+.text-\[\#183D2C\],
+.text-\[\#163A2B\],
+.text-\[\#21513B\],
+.text-\[\#10281C\],
+.text-\[\#14291E\],
+.text-\[\#14261D\] {
+  color: var(--m3-primary) !important;
+}
+.border-\[\#183D2C\],
+.border-\[\#163A2B\] {
+  border-color: var(--m3-primary) !important;
+}
+.bg-\[\#F6FBF7\],
+.bg-\[\#F4F6F3\] {
+  background-color: var(--m3-surface) !important;
+}
+.bg-\[\#F6FBF7\]\/95 {
+  background-color: color-mix(in srgb, var(--m3-surface) 95%, transparent) !important;
+}
+.bg-\[\#D8F3E3\] {
+  background-color: var(--m3-container) !important;
+}
+.bg-\[\#E4F3EA\],
+.bg-\[\#E7F3EC\],
+.bg-\[\#EBF4EE\],
+.bg-\[\#EBF3EE\],
+.bg-\[\#EAF5EE\],
+.bg-\[\#EEF7F2\],
+.bg-\[\#E6EFE9\],
+.bg-\[\#F2F9F5\],
+.bg-\[\#F4F8F5\] {
+  background-color: var(--m3-container-soft) !important;
+}
+.text-\[\#A6F2C6\],
+.text-\[\#B6DEC6\] {
+  color: var(--m3-accent) !important;
+}
+.bg-\[\#A6F2C6\] {
+  background-color: var(--m3-accent) !important;
+}
+.border-\[\#D8E6DD\],
+.border-\[\#DCEAE1\],
+.border-\[\#DCE3DD\],
+.border-\[\#D5E5DC\],
+.border-\[\#D5E8DC\] {
+  border-color: var(--m3-border) !important;
+}
+.border-\[\#CDE0D4\],
+.border-\[\#C6DFD0\],
+.border-\[\#C3DFCF\],
+.border-\[\#C8DFD0\],
+.border-\[\#9EE2B9\] {
+  border-color: var(--m3-border-strong) !important;
+}
+.text-\[\#CDE8D8\] {
+  color: var(--m3-on-primary-muted) !important;
+}
+
+/* Android 16/17 Secondary Palette Remapping (Warm/Contrast Secondary) */
+.bg-\[\#FCE8D5\],
+.bg-\[\#FDF1E1\],
+.bg-\[\#FEF3C7\],
+.m3-secondary-surface {
+  background-color: var(--m3-secondary-container) !important;
+  color: var(--m3-on-secondary-container) !important;
+  border-color: var(--m3-secondary-border) !important;
+}
+.text-\[\#7A4F2B\],
+.text-\[\#5E3A1C\],
+.text-\[\#92400E\],
+.text-\[\#D97706\] {
+  color: var(--m3-secondary) !important;
+}
+.border-\[\#FDE68A\],
+.border-\[\#E8DFB5\] {
+  border-color: var(--m3-secondary-border) !important;
+}
+.m3-secondary-badge {
+  background-color: var(--m3-secondary) !important;
+  color: #FFFFFF !important;
+}
+
+/* Android 16/17 Tertiary Palette Remapping (Complementary Tertiary) */
+.bg-\[\#D6EEF8\],
+.bg-\[\#E8F6FD\],
+.bg-\[\#EAE2FA\],
+.m3-tertiary-surface {
+  background-color: var(--m3-tertiary-container) !important;
+  color: var(--m3-on-tertiary-container) !important;
+  border-color: var(--m3-tertiary-border) !important;
+}
+.text-\[\#1D5B79\],
+.text-\[\#12455E\],
+.text-\[\#5C4389\],
+.text-\[\#432C6E\] {
+  color: var(--m3-tertiary) !important;
+}
+.m3-tertiary-badge {
+  background-color: var(--m3-tertiary) !important;
+  color: #FFFFFF !important;
+}
+
+/* Material 3 Expressive spring transitions */
+.m3-expressive-transition {
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms cubic-bezier(0.16, 1, 0.3, 1), background-color 180ms ease;
+}
+
+/* Official Google Sign-In Material Button */
+.gsi-material-button {
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  -webkit-appearance: none;
+  background-color: #FFFFFF;
+  background-image: none;
+  border: 1px solid #747775;
+  -webkit-border-radius: 20px;
+  border-radius: 20px;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+  color: #1f1f1f;
+  cursor: pointer;
+  font-family: 'DM Sans', arial, sans-serif;
+  font-size: 14px;
+  height: 40px;
+  letter-spacing: 0.25px;
+  outline: none;
+  overflow: hidden;
+  padding: 0 14px;
+  position: relative;
+  text-align: center;
+  -webkit-transition: background-color .218s, border-color .218s, box-shadow .218s;
+  transition: background-color .218s, border-color .218s, box-shadow .218s;
+  vertical-align: middle;
+  white-space: nowrap;
+  width: auto;
+  max-width: 400px;
+  min-width: min-content;
+}
+
+.gsi-material-button .gsi-material-button-icon {
+  height: 18px;
+  margin-right: 10px;
+  min-width: 18px;
+  width: 18px;
+}
+
+.gsi-material-button .gsi-material-button-content-wrapper {
+  -webkit-align-items: center;
+  align-items: center;
+  display: flex;
+  -webkit-flex-direction: row;
+  flex-direction: row;
+  -webkit-flex-wrap: nowrap;
+  flex-wrap: nowrap;
+  height: 100%;
+  justify-content: space-between;
+  position: relative;
+  width: 100%;
+}
+
+.gsi-material-button .gsi-material-button-contents {
+  -webkit-flex-grow: 1;
+  flex-grow: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
+}
+
+.gsi-material-button .gsi-material-button-state {
+  -webkit-transition: opacity .218s;
+  transition: opacity .218s;
+  bottom: 0;
+  left: 0;
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.gsi-material-button:hover {
+  -webkit-box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .30), 0 1px 3px 1px rgba(60, 64, 67, .15);
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .30), 0 1px 3px 1px rgba(60, 64, 67, .15);
+}
+
+.gsi-material-button:hover .gsi-material-button-state {
+  background-color: #303030;
+  opacity: 6%;
+}
