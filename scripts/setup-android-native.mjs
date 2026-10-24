@@ -930,6 +930,81 @@ public class HemNativeBridge {
     }
 
     @JavascriptInterface
+    public String localHttpRequest(String method, String urlStr, String jsonBody) {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(urlStr);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setInstanceFollowRedirects(true);
+            conn.setRequestMethod(method != null ? method.toUpperCase() : "GET");
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
+            conn.setRequestProperty("Accept", "application/json");
+            if (jsonBody != null && !jsonBody.isEmpty() && ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method))) {
+                conn.setDoOutput(true);
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                byte[] outBytes = jsonBody.getBytes(StandardCharsets.UTF_8);
+                conn.getOutputStream().write(outBytes);
+            }
+            int code = conn.getResponseCode();
+            InputStream is = (code >= 200 && code < 400) ? conn.getInputStream() : conn.getErrorStream();
+            if (is == null) return "";
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = is.read(buf)) != -1) {
+                baos.write(buf, 0, n);
+            }
+            is.close();
+            return new String(baos.toByteArray(), StandardCharsets.UTF_8);
+        } catch (Throwable ignored) {
+            return "";
+        } finally {
+            if (conn != null) {
+                try { conn.disconnect(); } catch (Throwable ignored) {}
+            }
+        }
+    }
+
+    @JavascriptInterface
+    public void setKeepScreenOn(final boolean keepOn) {
+        if (mainActivity == null) return;
+        try {
+            mainActivity.runOnUiThread(() -> {
+                try {
+                    if (keepOn) {
+                        mainActivity.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    } else {
+                        mainActivity.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    }
+                } catch (Throwable ignored) {}
+            });
+        } catch (Throwable ignored) {}
+    }
+
+    @JavascriptInterface
+    public boolean launchExternalApp(String packageName, String fallbackUrl) {
+        if (appContext == null) return false;
+        try {
+            if (packageName != null && !packageName.isEmpty()) {
+                Intent launchIntent = appContext.getPackageManager().getLaunchIntentForPackage(packageName);
+                if (launchIntent != null) {
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    appContext.startActivity(launchIntent);
+                    return true;
+                }
+            }
+            if (fallbackUrl != null && !fallbackUrl.isEmpty()) {
+                Intent viewIntent = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(fallbackUrl));
+                viewIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                appContext.startActivity(viewIntent);
+                return true;
+            }
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
+    @JavascriptInterface
     public boolean requestCameraPermission() {
         if (mainActivity == null) return false;
         return mainActivity.ensureCameraPermission(false);
