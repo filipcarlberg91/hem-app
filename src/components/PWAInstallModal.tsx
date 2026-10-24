@@ -179,6 +179,14 @@ export const PWAInstallControl: React.FC<PWAInstallControlProps> = ({
                     Ladda ner .aab (Wear OS Klocka)
                   </a>
                 </div>
+                <a
+                  href="/play-store/index.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full min-h-[38px] rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-xs font-bold text-[#A6F2C6] hover:bg-white/20 flex items-center justify-center gap-2 text-center"
+                >
+                  Öppna & ladda ner Play Console-bilder (Wear OS, Mobil & Surfplatta) →
+                </a>
               </div>
 
               {/* Direct GitHub Push Card */}

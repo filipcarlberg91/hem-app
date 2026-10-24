@@ -785,6 +785,289 @@ const tablet2Svg = `<?xml version="1.0" encoding="UTF-8"?>
 
 await renderSvgToPng(tablet2Svg, 'Hem-Surfplatta-2-Kalender-Budget-1920x1080.png', 1920, 1080);
 
+// ============================================================================
+// WEAR OS SCREENSHOTS (1080 x 1080 — 1:1 Square, 24-bit RGB, Circular-Safe UI)
+// ============================================================================
+
+async function renderWearSvgToPng(svgContent, pngFilename) {
+  const outPng = path.join(outDir, pngFilename);
+  const safeSvg = svgContent.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/g, '&amp;');
+  await sharp(Buffer.from(safeSvg, 'utf8'), { density: 144 })
+    .resize(1080, 1080)
+    .flatten({ background: '#08110C' })
+    .png({ compressionLevel: 9 })
+    .toFile(outPng);
+  console.log(`Generated ${pngFilename} (1080x1080)`);
+}
+
+// Wear OS 1: Inköpslista (M3 Expressive Watch App)
+const wear1ShoppingSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="wearBg" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#11261B" />
+      <stop offset="100%" stop-color="#08110C" />
+    </radialGradient>
+  </defs>
+
+  <!-- Full-bleed dark watch background (no hardware bezel, circular-safe content inside r=490) -->
+  <rect width="1080" height="1080" fill="url(#wearBg)" />
+
+  <!-- Top curved time & brand header -->
+  <text x="540" y="102" text-anchor="middle" font-family="Liberation Mono" font-weight="bold" font-size="34" fill="#B7D7C5">09:42</text>
+  <text x="540" y="148" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="22" fill="#A6F2C6" letter-spacing="2">HEM · INKÖPSLISTA</text>
+
+  <!-- M3 Expressive Segmented Navigation Pills -->
+  <g transform="translate(150, 174)">
+    <rect x="0" y="0" width="248" height="74" rx="37" fill="#A6F2C6" />
+    <text x="124" y="46" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="26" fill="#082014">Inköp (4)</text>
+
+    <rect x="264" y="0" width="248" height="74" rx="37" fill="#162F22" stroke="#28533D" stroke-width="2" />
+    <text x="388" y="46" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="25" fill="#D5ECE0">Kalender</text>
+
+    <rect x="528" y="0" width="252" height="74" rx="37" fill="#162F22" stroke="#28533D" stroke-width="2" />
+    <text x="654" y="46" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="25" fill="#D5ECE0">Att göra</text>
+  </g>
+
+  <!-- Quick Add Action Pill (+ Ny vara) -->
+  <g transform="translate(240, 272)">
+    <rect x="0" y="0" width="600" height="84" rx="42" fill="#183D2C" stroke="#8CE6B4" stroke-width="2.5" />
+    <circle cx="52" cy="42" r="24" fill="#A6F2C6" />
+    <text x="52" y="52" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="32" fill="#082014">+</text>
+    <text x="326" y="52" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="28" fill="#FFFFFF">Lägg till ny vara</text>
+  </g>
+
+  <!-- Item 1 -->
+  <g transform="translate(130, 380)">
+    <rect x="0" y="0" width="820" height="132" rx="66" fill="#152C20" stroke="#28533D" stroke-width="2.5" />
+    <circle cx="72" cy="66" r="28" fill="#0D1E15" stroke="#A6F2C6" stroke-width="4" />
+    <text x="128" y="58" font-family="Liberation Sans" font-weight="bold" font-size="31" fill="#FFFFFF">Avokado mogen</text>
+    <text x="128" y="96" font-family="Liberation Sans" font-weight="bold" font-size="22" fill="#8CE6B4">Frukt &amp; Grönt · 3 st</text>
+    <rect x="668" y="38" width="116" height="56" rx="28" fill="#1E4633" />
+    <text x="726" y="74" text-anchor="middle" font-family="Liberation Mono" font-weight="bold" font-size="24" fill="#A6F2C6">3 st</text>
+  </g>
+
+  <!-- Item 2 -->
+  <g transform="translate(130, 530)">
+    <rect x="0" y="0" width="820" height="132" rx="66" fill="#152C20" stroke="#28533D" stroke-width="2.5" />
+    <circle cx="72" cy="66" r="28" fill="#0D1E15" stroke="#A6F2C6" stroke-width="4" />
+    <text x="128" y="58" font-family="Liberation Sans" font-weight="bold" font-size="31" fill="#FFFFFF">Ekologisk mellanmjölk</text>
+    <text x="128" y="96" font-family="Liberation Sans" font-weight="bold" font-size="22" fill="#93C5FD">Mejeri, Ost &amp; Ägg · 2 liter</text>
+    <rect x="668" y="38" width="116" height="56" rx="28" fill="#1E4633" />
+    <text x="726" y="74" text-anchor="middle" font-family="Liberation Mono" font-weight="bold" font-size="24" fill="#A6F2C6">2 l</text>
+  </g>
+
+  <!-- Item 3 -->
+  <g transform="translate(155, 680)">
+    <rect x="0" y="0" width="770" height="128" rx="64" fill="#152C20" stroke="#28533D" stroke-width="2.5" />
+    <circle cx="70" cy="64" r="28" fill="#0D1E15" stroke="#A6F2C6" stroke-width="4" />
+    <text x="124" y="56" font-family="Liberation Sans" font-weight="bold" font-size="30" fill="#FFFFFF">Surdegsbröd Levain</text>
+    <text x="124" y="94" font-family="Liberation Sans" font-weight="bold" font-size="22" fill="#FDE68A">Bröd &amp; Bageri · 1 förp</text>
+    <rect x="626" y="36" width="110" height="56" rx="28" fill="#1E4633" />
+    <text x="681" y="72" text-anchor="middle" font-family="Liberation Mono" font-weight="bold" font-size="23" fill="#A6F2C6">1 st</text>
+  </g>
+
+  <!-- Item 4 (Checked / Klart) -->
+  <g transform="translate(230, 826)">
+    <rect x="0" y="0" width="620" height="106" rx="53" fill="#0F2017" stroke="#1E3F2E" stroke-width="2" />
+    <circle cx="60" cy="53" r="24" fill="#A6F2C6" />
+    <path d="M49 53 L57 61 L72 45" fill="none" stroke="#082014" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="106" y="62" font-family="Liberation Sans" font-weight="bold" font-size="27" fill="#7FA691">Bryggkaffe Mellanrost (Klart)</text>
+  </g>
+</svg>`;
+
+await renderWearSvgToPng(wear1ShoppingSvg, 'Hem-WearOS-1-Inkop-1080x1080.png');
+
+// Wear OS 2: Kalender (M3 Expressive Watch App — Datum & tid överst, kategorifärger)
+const wear2CalendarSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="wearBg2" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#11261B" />
+      <stop offset="100%" stop-color="#08110C" />
+    </radialGradient>
+  </defs>
+
+  <rect width="1080" height="1080" fill="url(#wearBg2)" />
+
+  <text x="540" y="102" text-anchor="middle" font-family="Liberation Mono" font-weight="bold" font-size="34" fill="#B7D7C5">09:42</text>
+  <text x="540" y="148" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="22" fill="#A6F2C6" letter-spacing="2">HEM · KALENDER (14 DAGAR)</text>
+
+  <!-- M3 Expressive Segmented Navigation Pills -->
+  <g transform="translate(150, 174)">
+    <rect x="0" y="0" width="248" height="74" rx="37" fill="#162F22" stroke="#28533D" stroke-width="2" />
+    <text x="124" y="46" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="25" fill="#D5ECE0">Inköp</text>
+
+    <rect x="264" y="0" width="248" height="74" rx="37" fill="#A6F2C6" />
+    <text x="388" y="46" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="26" fill="#082014">Kalender</text>
+
+    <rect x="528" y="0" width="252" height="74" rx="37" fill="#162F22" stroke="#28533D" stroke-width="2" />
+    <text x="654" y="46" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="25" fill="#D5ECE0">Att göra</text>
+  </g>
+
+  <!-- Event 1: Blue Category (Arbete / Jobb) - Date & Time on top, Event title below -->
+  <g transform="translate(130, 278)">
+    <rect x="0" y="0" width="820" height="176" rx="58" fill="#102742" stroke="#3B82F6" stroke-width="3" />
+    <rect x="36" y="26" width="384" height="46" rx="23" fill="#2563EB" />
+    <text x="228" y="56" text-anchor="middle" font-family="Liberation Mono" font-weight="bold" font-size="22" fill="#FFFFFF">IDAG 19 OKT · 08:00–16:30</text>
+    <text x="774" y="58" text-anchor="end" font-family="Liberation Sans" font-weight="bold" font-size="21" fill="#93C5FD">ARBETE</text>
+    <text x="42" y="122" font-family="Liberation Sans" font-weight="bold" font-size="36" fill="#FFFFFF">Jobb &amp; Projektmöte</text>
+    <text x="42" y="154" font-family="Liberation Sans" font-size="22" fill="#BFDBFE">Kontoret · Synkad med familjen</text>
+  </g>
+
+  <!-- Event 2: Emerald Category (Familj) -->
+  <g transform="translate(130, 476)">
+    <rect x="0" y="0" width="820" height="176" rx="58" fill="#112E22" stroke="#10B981" stroke-width="3" />
+    <rect x="36" y="26" width="384" height="46" rx="23" fill="#059669" />
+    <text x="228" y="56" text-anchor="middle" font-family="Liberation Mono" font-weight="bold" font-size="22" fill="#FFFFFF">IDAG 19 OKT · 17:30–18:30</text>
+    <text x="774" y="58" text-anchor="end" font-family="Liberation Sans" font-weight="bold" font-size="21" fill="#6EE7B7">FAMILJ</text>
+    <text x="42" y="122" font-family="Liberation Sans" font-weight="bold" font-size="36" fill="#FFFFFF">Förskolehämtning &amp; fotboll</text>
+    <text x="42" y="154" font-family="Liberation Sans" font-size="22" fill="#A7F3D0">Slottsskogen · Maja &amp; Filip</text>
+  </g>
+
+  <!-- Event 3: Orange Category (Heldag / Fritid) -->
+  <g transform="translate(160, 674)">
+    <rect x="0" y="0" width="760" height="176" rx="58" fill="#331B0E" stroke="#F97316" stroke-width="3" />
+    <rect x="36" y="26" width="328" height="46" rx="23" fill="#EA580C" />
+    <text x="200" y="56" text-anchor="middle" font-family="Liberation Mono" font-weight="bold" font-size="22" fill="#FFFFFF">LÖR 24 OKT · HELDAG</text>
+    <text x="716" y="58" text-anchor="end" font-family="Liberation Sans" font-weight="bold" font-size="21" fill="#FDBA74">HELDAG</text>
+    <text x="42" y="122" font-family="Liberation Sans" font-weight="bold" font-size="34" fill="#FFFFFF">Höstutflykt med familjen</text>
+    <text x="42" y="154" font-family="Liberation Sans" font-size="22" fill="#FED7AA">Marstrand · Heldagshändelse</text>
+  </g>
+
+  <!-- Bottom Pill Indicator -->
+  <rect x="350" y="882" width="380" height="64" rx="32" fill="#162F22" stroke="#28533D" stroke-width="2" />
+  <text x="540" y="923" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="24" fill="#A6F2C6">Visar 2 veckor framåt</text>
+</svg>`;
+
+await renderWearSvgToPng(wear2CalendarSvg, 'Hem-WearOS-2-Kalender-1080x1080.png');
+
+// Wear OS 3: Att göra (M3 Expressive Watch App)
+const wear3TodoSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="wearBg3" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#11261B" />
+      <stop offset="100%" stop-color="#08110C" />
+    </radialGradient>
+  </defs>
+
+  <rect width="1080" height="1080" fill="url(#wearBg3)" />
+
+  <text x="540" y="102" text-anchor="middle" font-family="Liberation Mono" font-weight="bold" font-size="34" fill="#B7D7C5">09:42</text>
+  <text x="540" y="148" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="22" fill="#A6F2C6" letter-spacing="2">HEM · ATT GÖRA</text>
+
+  <!-- M3 Expressive Segmented Navigation Pills -->
+  <g transform="translate(150, 174)">
+    <rect x="0" y="0" width="248" height="74" rx="37" fill="#162F22" stroke="#28533D" stroke-width="2" />
+    <text x="124" y="46" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="25" fill="#D5ECE0">Inköp</text>
+
+    <rect x="264" y="0" width="248" height="74" rx="37" fill="#162F22" stroke="#28533D" stroke-width="2" />
+    <text x="388" y="46" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="25" fill="#D5ECE0">Kalender</text>
+
+    <rect x="528" y="0" width="252" height="74" rx="37" fill="#A6F2C6" />
+    <text x="654" y="46" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="26" fill="#082014">Att göra (3)</text>
+  </g>
+
+  <!-- Quick Add Task Pill -->
+  <g transform="translate(240, 272)">
+    <rect x="0" y="0" width="600" height="84" rx="42" fill="#183D2C" stroke="#8CE6B4" stroke-width="2.5" />
+    <circle cx="52" cy="42" r="24" fill="#A6F2C6" />
+    <text x="52" y="52" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="32" fill="#082014">+</text>
+    <text x="326" y="52" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="28" fill="#FFFFFF">Ny uppgift på klockan</text>
+  </g>
+
+  <!-- Task 1: High Priority -->
+  <g transform="translate(130, 380)">
+    <rect x="0" y="0" width="820" height="140" rx="70" fill="#152C20" stroke="#F87171" stroke-width="2.5" />
+    <rect x="44" y="42" width="56" height="56" rx="18" fill="#0D1E15" stroke="#A6F2C6" stroke-width="4" />
+    <text x="126" y="62" font-family="Liberation Sans" font-weight="bold" font-size="31" fill="#FFFFFF">Boka däckskifte &amp; vinterdäck</text>
+    <rect x="126" y="78" width="150" height="38" rx="19" fill="#7F1D1D" />
+    <text x="201" y="104" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="19" fill="#FECACA">HÖG PRIO</text>
+    <text x="294" y="104" font-family="Liberation Mono" font-weight="bold" font-size="22" fill="#B7D7C5">Idag · Påminnelse 14:00</text>
+  </g>
+
+  <!-- Task 2: Medium Priority -->
+  <g transform="translate(130, 540)">
+    <rect x="0" y="0" width="820" height="140" rx="70" fill="#152C20" stroke="#28533D" stroke-width="2.5" />
+    <rect x="44" y="42" width="56" height="56" rx="18" fill="#0D1E15" stroke="#A6F2C6" stroke-width="4" />
+    <text x="126" y="62" font-family="Liberation Sans" font-weight="bold" font-size="31" fill="#FFFFFF">Packa utflyktsryggsäck</text>
+    <rect x="126" y="78" width="140" height="38" rx="19" fill="#1E4633" />
+    <text x="196" y="104" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="19" fill="#A6F2C6">FAMILJ</text>
+    <text x="284" y="104" font-family="Liberation Mono" font-weight="bold" font-size="22" fill="#B7D7C5">Imorgon · Medelprio</text>
+  </g>
+
+  <!-- Task 3: Completed -->
+  <g transform="translate(170, 700)">
+    <rect x="0" y="0" width="740" height="130" rx="65" fill="#0F2017" stroke="#1E3F2E" stroke-width="2" />
+    <rect x="42" y="39" width="52" height="52" rx="16" fill="#A6F2C6" />
+    <path d="M55 65 L64 74 L81 55" fill="none" stroke="#082014" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="120" y="62" font-family="Liberation Sans" font-weight="bold" font-size="29" fill="#89B09B">Betala månadsfaktura bredband</text>
+    <text x="120" y="98" font-family="Liberation Mono" font-weight="bold" font-size="21" fill="#5D8771">KLART · EKONOMI</text>
+  </g>
+
+  <text x="540" y="905" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="23" fill="#8CE6B4">Tryck på en ruta för att bocka av direkt</text>
+</svg>`;
+
+await renderWearSvgToPng(wear3TodoSvg, 'Hem-WearOS-3-AttGora-1080x1080.png');
+
+// Wear OS 4: Wear OS Tile / Snabbpanel (M3 Expressive Tile)
+const wear4TileSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="wearBg4" cx="50%" cy="25%" r="75%">
+      <stop offset="0%" stop-color="#143022" />
+      <stop offset="100%" stop-color="#08110C" />
+    </radialGradient>
+  </defs>
+
+  <rect width="1080" height="1080" fill="url(#wearBg4)" />
+
+  <!-- Top Tile Header -->
+  <rect x="330" y="88" width="420" height="58" rx="29" fill="#162F22" stroke="#28533D" stroke-width="2" />
+  <text x="540" y="126" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="24" fill="#A6F2C6" letter-spacing="1.5">WEAR OS-PANEL · HEM</text>
+
+  <text x="540" y="210" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="42" fill="#FFFFFF">Inköp &amp; Dagens agenda</text>
+  <text x="540" y="254" text-anchor="middle" font-family="Liberation Sans" font-size="24" fill="#B7D7C5">Svep åt sidan på urtavlan för snabbåtkomst</text>
+
+  <!-- 2x2 Expressive Pill Grid -->
+  <g transform="translate(116, 294)">
+    <!-- Chip 1 -->
+    <rect x="0" y="0" width="410" height="170" rx="56" fill="#183D2C" stroke="#8CE6B4" stroke-width="2.5" />
+    <text x="44" y="64" font-family="Liberation Sans" font-weight="bold" font-size="21" fill="#A6F2C6">INKÖP · FRUKT &amp; GRÖNT</text>
+    <text x="44" y="112" font-family="Liberation Sans" font-weight="bold" font-size="33" fill="#FFFFFF">Avokado (3 st)</text>
+    <text x="44" y="146" font-family="Liberation Mono" font-size="21" fill="#CDE8D8">Tryck för att bocka av</text>
+
+    <!-- Chip 2 -->
+    <rect x="438" y="0" width="410" height="170" rx="56" fill="#183D2C" stroke="#8CE6B4" stroke-width="2.5" />
+    <text x="482" y="64" font-family="Liberation Sans" font-weight="bold" font-size="21" fill="#A6F2C6">INKÖP · MEJERI</text>
+    <text x="482" y="112" font-family="Liberation Sans" font-weight="bold" font-size="33" fill="#FFFFFF">Mellanmjölk (2 l)</text>
+    <text x="482" y="146" font-family="Liberation Mono" font-size="21" fill="#CDE8D8">Tryck för att bocka av</text>
+
+    <!-- Chip 3 (Calendar Event) -->
+    <rect x="0" y="196" width="410" height="170" rx="56" fill="#102742" stroke="#3B82F6" stroke-width="2.5" />
+    <text x="44" y="260" font-family="Liberation Mono" font-weight="bold" font-size="21" fill="#93C5FD">IDAG · 16:30–17:30</text>
+    <text x="44" y="308" font-family="Liberation Sans" font-weight="bold" font-size="33" fill="#FFFFFF">Förskolehämtning</text>
+    <text x="44" y="342" font-family="Liberation Sans" font-size="21" fill="#BFDBFE">Kalender · Familj</text>
+
+    <!-- Chip 4 (Task) -->
+    <rect x="438" y="196" width="410" height="170" rx="56" fill="#152C20" stroke="#28533D" stroke-width="2.5" />
+    <text x="482" y="260" font-family="Liberation Mono" font-weight="bold" font-size="21" fill="#FCA5A5">ATT GÖRA · HÖG PRIO</text>
+    <text x="482" y="308" font-family="Liberation Sans" font-weight="bold" font-size="33" fill="#FFFFFF">Boka däckskifte</text>
+    <text x="482" y="342" font-family="Liberation Sans" font-size="21" fill="#B7D7C5">Påminnelse 14:00</text>
+  </g>
+
+  <!-- Bottom Expressive Primary Action Pill -->
+  <g transform="translate(210, 716)">
+    <rect x="0" y="0" width="660" height="114" rx="57" fill="#A6F2C6" />
+    <text x="330" y="69" text-anchor="middle" font-family="Liberation Sans" font-weight="bold" font-size="34" fill="#082014">Öppna Hem på klockan →</text>
+  </g>
+
+  <text x="540" y="902" text-anchor="middle" font-family="Liberation Mono" font-weight="bold" font-size="22" fill="#8CE6B4">3 separata Wear OS-paneler ingår</text>
+</svg>`;
+
+await renderWearSvgToPng(wear4TileSvg, 'Hem-WearOS-4-Tile-Panel-1080x1080.png');
+
 // Generate HTML gallery page in public/play-store/index.html
 const galleryHtml = `<!DOCTYPE html>
 <html lang="sv">
@@ -824,6 +1107,11 @@ const galleryHtml = `<!DOCTYPE html>
     .grid-phones {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .grid-watches {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
       gap: 16px;
     }
     .grid-tablets {
@@ -870,7 +1158,34 @@ const galleryHtml = `<!DOCTYPE html>
     </div>
 
     <div class="section">
-      <h2>1. Funktionsbild (Feature Graphic)</h2>
+      <h2>1. Skärmbilder för Wear OS / Klocka (4 st · 1080 × 1080 px, 1:1)</h2>
+      <p class="spec">Krav i Play Console för Wear OS: Minst 2 bilder · 1:1 kvadratiskt format (minst 384 × 384 px, här 1080 × 1080 px) · 24-bit PNG utan genomskinlighet och utan klockram</p>
+      <div class="grid-watches">
+        <div class="card">
+          <img src="Hem-WearOS-1-Inkop-1080x1080.png" alt="Wear OS Inköpslista" />
+          <div class="card-title">1. Klocka — Inköpslista (1080×1080)</div>
+          <a class="btn" href="Hem-WearOS-1-Inkop-1080x1080.png" download="Hem-WearOS-1-Inkop-1080x1080.png">Ladda ner PNG</a>
+        </div>
+        <div class="card">
+          <img src="Hem-WearOS-2-Kalender-1080x1080.png" alt="Wear OS Kalender" />
+          <div class="card-title">2. Klocka — Kalender &amp; färger (1080×1080)</div>
+          <a class="btn" href="Hem-WearOS-2-Kalender-1080x1080.png" download="Hem-WearOS-2-Kalender-1080x1080.png">Ladda ner PNG</a>
+        </div>
+        <div class="card">
+          <img src="Hem-WearOS-3-AttGora-1080x1080.png" alt="Wear OS Att göra" />
+          <div class="card-title">3. Klocka — Att göra-lista (1080×1080)</div>
+          <a class="btn" href="Hem-WearOS-3-AttGora-1080x1080.png" download="Hem-WearOS-3-AttGora-1080x1080.png">Ladda ner PNG</a>
+        </div>
+        <div class="card">
+          <img src="Hem-WearOS-4-Tile-Panel-1080x1080.png" alt="Wear OS Tile Panel" />
+          <div class="card-title">4. Klocka — Wear OS-panel / Tile (1080×1080)</div>
+          <a class="btn" href="Hem-WearOS-4-Tile-Panel-1080x1080.png" download="Hem-WearOS-4-Tile-Panel-1080x1080.png">Ladda ner PNG</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>2. Funktionsbild (Feature Graphic)</h2>
       <p class="spec">Krav i Play Console: 1024 × 500 px · 24-bit PNG (ingen alfa)</p>
       <div class="card" style="max-width: 680px;">
         <img src="Hem-Funktionsbild-1024x500.png" alt="Funktionsbild 1024x500" />
@@ -880,7 +1195,7 @@ const galleryHtml = `<!DOCTYPE html>
     </div>
 
     <div class="section">
-      <h2>2. Skärmbilder för Telefon (5 st med exempeldata)</h2>
+      <h2>3. Skärmbilder för Telefon (5 st med exempeldata)</h2>
       <p class="spec">Krav i Play Console: Minst 2–8 bilder · 1080 × 1920 px (9:16 stående) · PNG</p>
       <div class="grid-phones">
         <div class="card">
@@ -912,7 +1227,7 @@ const galleryHtml = `<!DOCTYPE html>
     </div>
 
     <div class="section">
-      <h2>3. Skärmbilder för Surfplatta 7 tum &amp; 10 tum (2 st)</h2>
+      <h2>4. Skärmbilder för Surfplatta 7 tum &amp; 10 tum (2 st)</h2>
       <p class="spec">Krav i Play Console: 1920 × 1080 px (16:9 liggande) · Kan laddas upp under både 7-tums och 10-tums surfplatta</p>
       <div class="grid-tablets">
         <div class="card">
@@ -929,7 +1244,7 @@ const galleryHtml = `<!DOCTYPE html>
     </div>
 
     <div class="section">
-      <h2>4. Högupplöst Appikon (512 × 512 px)</h2>
+      <h2>5. Högupplöst Appikon (512 × 512 px)</h2>
       <p class="spec">Krav i Play Console: 512 × 512 px · 32-bit PNG</p>
       <div class="card" style="max-width: 240px;">
         <img src="Hem-Appikon-512x512.png" alt="Appikon 512x512" />
@@ -943,4 +1258,5 @@ const galleryHtml = `<!DOCTYPE html>
 
 fs.writeFileSync(path.join(outDir, 'index.html'), galleryHtml, 'utf8');
 console.log('All Play Store assets generated successfully!');
+
 

@@ -819,6 +819,15 @@ Script.complete();`;
                   <Watch className="h-4 w-4" />
                   <span>Wear OS .aab (Play Console Klockspår)</span>
                 </a>
+                <a
+                  href="/play-store/index.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-h-[42px] rounded-2xl bg-[#E4F3EA] border border-[#CDE0D4] text-[#183D2C] px-4 py-2 text-xs font-extrabold flex items-center gap-2 hover:bg-[#D8F3E3] transition-colors"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Skärmbilder för Klocka (Play Console)</span>
+                </a>
                 <button
                   type="button"
                   onClick={() => openFloatingPwaWidget('wear')}
