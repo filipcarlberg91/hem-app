@@ -3930,7 +3930,12 @@ if (fs.existsSync(appBuildGradlePath)) {
   if (!gradleContent.includes('androidx.wear.tiles:tiles')) {
     gradleContent = gradleContent.replace(
       /dependencies\s*\{/,
-      "dependencies {\n    implementation 'androidx.wear.tiles:tiles:1.1.0'\n    implementation 'com.google.guava:guava:31.1-android'"
+      "dependencies {\n    implementation 'androidx.wear.tiles:tiles:1.5.0'\n    implementation 'androidx.wear.tiles:tiles-proto:1.5.0'\n    implementation 'androidx.wear.protolayout:protolayout:1.3.0'\n    implementation 'androidx.wear.protolayout:protolayout-proto:1.3.0'\n    implementation 'com.google.guava:guava:31.1-android'"
+    );
+  } else {
+    gradleContent = gradleContent.replace(
+      /androidx\.wear\.tiles:tiles:[0-9A-Za-z.-]+/g,
+      'androidx.wear.tiles:tiles:1.5.0'
     );
   }
   fs.writeFileSync(appBuildGradlePath, gradleContent, 'utf8');
@@ -3951,6 +3956,10 @@ const proguardRules = `# Keep JavascriptInterface annotations and methods for We
 
 # Keep Wear OS TileService & ProtoLayout classes intact
 -keep class androidx.wear.tiles.** { *; }
+-keep class androidx.wear.protolayout.** { *; }
+-keepclassmembers class * extends androidx.wear.protolayout.protobuf.GeneratedMessageLite {
+    <fields>;
+}
 
 # Keep Capacitor core Activity and Plugin entry points
 -keep class com.getcapacitor.BridgeActivity { *; }
