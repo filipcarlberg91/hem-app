@@ -49,18 +49,10 @@ jobs:
           git push "https://x-access-token:${TOKEN}@github.com/filipcarlberg91/Hem.git" HEAD:refs/heads/gh-pages --force
 
       - name: Deploy PWA to https://hemmahosf.web.app (Firebase Hosting)
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            npm run build
-            rm -f dist/release-key.jks dist/*.aab dist/*.apk
-            echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/fb-sa.json
-            export GOOGLE_APPLICATION_CREDENTIALS="/tmp/fb-sa.json"
-            npx --yes firebase-tools hosting:sites:create hemmahosf --project gen-lang-client-0269437912 || true
-            npx --yes firebase-tools deploy --only hosting:hemmahosf --project gen-lang-client-0269437912
-            rm -f /tmp/fb-sa.json
-          fi
+          npm run build
+          rm -f dist/release-key.jks dist/*.aab dist/*.apk
+          node scripts/deploy-firebase-hosting.mjs
 
       - name: Build native bundle & configure Android plugins + icon
         run: |

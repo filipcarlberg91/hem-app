@@ -308,10 +308,15 @@ self.addEventListener('sync', (event) => {
   }
 });
 
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       try {
+        await self.clients.claim();
         const windowClients = await self.clients.matchAll({
           type: 'window',
           includeUncontrolled: true,
@@ -328,4 +333,5 @@ self.addEventListener('activate', (event) => {
     })()
   );
 });
+
 

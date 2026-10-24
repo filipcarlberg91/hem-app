@@ -47,6 +47,18 @@ if (typeof window !== 'undefined') {
               if (reg.waiting) {
                 reg.waiting.postMessage({ type: 'SKIP_WAITING' });
               }
+              reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                if (!newWorker) return;
+                newWorker.addEventListener('statechange', () => {
+                  if (
+                    newWorker.state === 'installed' &&
+                    navigator.serviceWorker.controller
+                  ) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                  }
+                });
+              });
             }
           }
         })
@@ -54,11 +66,15 @@ if (typeof window !== 'undefined') {
     };
 
     checkAndUpdateRegistrations();
+    // Check for new PWA version every 45 seconds and whenever app comes to foreground
+    setInterval(checkAndUpdateRegistrations, 45000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         checkAndUpdateRegistrations();
       }
     });
+    window.addEventListener('focus', checkAndUpdateRegistrations);
+    window.addEventListener('pageshow', checkAndUpdateRegistrations);
 
     if (isNativeShell && 'caches' in window) {
       caches
