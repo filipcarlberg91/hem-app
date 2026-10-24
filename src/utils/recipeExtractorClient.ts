@@ -505,7 +505,7 @@ export function parseRecipeFromHtmlOrText(htmlOrText: string, sourceUrl: string)
           return false;
         if (/^\[.*\]\(.*\)$/.test(l) || /^https?:\/\//i.test(l)) return false;
         if (
-          /(?:Hoppa till|Lägg i inköpslista|Spara recept|Logga in|Betyg|kommentarer|Näringsvärde|Klimatavtryck|Köp online|Dela recept|Gå till|Öppna menyn|Köp plus)/i.test(
+          /(?:Hoppa till|Lägg i inköpslista|Spara recept|Logga in|Betyg|kommentarer|Näringsvärde|Klimatavtryck|Klimatsmart|klimatsmart val|Köp online|Dela recept|Gå till|Öppna menyn|Köp plus)/i.test(
             l
           )
         )
@@ -742,41 +742,143 @@ function buildFallbackRecipeFromUrlSlug(url: string): any {
   }
 }
 
-async function fetchUrlContentClientSide(targetUrl: string): Promise<string[]> {
-  // Jina Reader is placed first because it reliably bypasses Cloudflare on ICA.se, Arla.se, Köket.se, etc. in ~1s
-  const candidates = [
-    `https://r.jina.ai/${targetUrl}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-  ];
+function isRealExtractedRecipe(data: any): boolean {
+  if (!data || !data.title || !Array.isArray(data.ingredients) || data.ingredients.length === 0) {
+    return false;
+  }
+  const firstIngName = String(data.ingredients[0]?.name || '');
+  if (
+    firstIngName.includes('Ingredienser (justera vid behov)') ||
+    firstIngName.includes('Se ingredienser på länken') ||
+    firstIngName.includes('Se receptlänk för ingredienser') ||
+    firstIngName.includes('Valfria ingredienser enligt länk')
+  ) {
+    return false;
+  }
+  if (data.ingredients.length === 1 && data.ingredients[0]?.unit === 'port') {
+    return false;
+  }
+  return true;
+}
 
-  const results: string[] = [];
-  for (const proxyUrl of candidates) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 7000);
-      const res = await fetch(proxyUrl, {
-        headers: proxyUrl.includes('r.jina.ai')
-          ? { Accept: 'text/plain, text/markdown, */*' }
-          : undefined,
-        signal: ctrl.signal,
-      });
-      clearTimeout(timer);
-      if (res.ok) {
-        const text = await res.text();
-        if (text && text.length > 80) {
-          const testExtract = parseRecipeFromHtmlOrText(text, targetUrl);
-          results.push(text);
-          if (testExtract && testExtract.ingredients?.length > 1) {
-            break;
-          }
+async function fetchSingleCandidateRecipe(
+  proxyUrl: string,
+  targetUrl: string,
+  isAllOriginsJson: boolean,
+  timeoutMs: number,
+  parentControllers: AbortController[]
+): Promise<any> {
+  const ctrl = new AbortController();
+  parentControllers.push(ctrl);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(proxyUrl, {
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    let text = '';
+    if (isAllOriginsJson) {
+      const json = await res.json();
+      text = typeof json?.contents === 'string' ? json.contents : '';
+    } else {
+      text = await res.text();
+    }
+    if (!text || text.length < 80) {
+      throw new Error('Empty response');
+    }
+    const extracted = parseRecipeFromHtmlOrText(text, targetUrl);
+    if (!isRealExtractedRecipe(extracted)) {
+      throw new Error('Not a complete recipe');
+    }
+    return extracted;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function extractRecipeClientSideParallel(targetUrl: string): Promise<any | null> {
+  // 0. If running inside the native Android app, try direct native HTTP fetch first (zero CORS / instant)
+  try {
+    const nativeBridge =
+      typeof window !== 'undefined' ? (window as any).HemNativeBridge : null;
+    if (nativeBridge && typeof nativeBridge.fetchUrlHtml === 'function') {
+      const nativeHtml = String(nativeBridge.fetchUrlHtml(targetUrl) || '');
+      if (nativeHtml.length > 80) {
+        const nativeParsed = parseRecipeFromHtmlOrText(nativeHtml, targetUrl);
+        if (isRealExtractedRecipe(nativeParsed)) {
+          return nativeParsed;
         }
       }
-    } catch {
-      // Try next proxy
     }
+  } catch {
+    // Fall through to parallel web proxies
   }
-  return results;
+
+  const controllers: AbortController[] = [];
+  const abortAll = () => {
+    for (const c of controllers) {
+      try {
+        c.abort();
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  try {
+    // Launch Jina Reader + AllOrigins Raw + AllOrigins JSON + CodeTabs in parallel.
+    // Whichever returns a valid recipe with real ingredients first wins immediately!
+    const winner = await Promise.any([
+      fetchSingleCandidateRecipe(
+        `https://r.jina.ai/${targetUrl}`,
+        targetUrl,
+        false,
+        16000,
+        controllers
+      ),
+      fetchSingleCandidateRecipe(
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+        targetUrl,
+        false,
+        16000,
+        controllers
+      ),
+      fetchSingleCandidateRecipe(
+        `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+        targetUrl,
+        true,
+        16000,
+        controllers
+      ),
+      fetchSingleCandidateRecipe(
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+        targetUrl,
+        false,
+        10000,
+        controllers
+      ),
+    ]);
+    abortAll();
+    return winner;
+  } catch {
+    abortAll();
+  }
+
+  // Follow-up retry on Jina Reader (in case the first wave warmed Jina's headless browser cache)
+  try {
+    const retryControllers: AbortController[] = [];
+    return await fetchSingleCandidateRecipe(
+      `https://r.jina.ai/${targetUrl}`,
+      targetUrl,
+      false,
+      10000,
+      retryControllers
+    );
+  } catch {
+    return null;
+  }
 }
 
 export async function extractRecipeFromImage(
@@ -807,37 +909,19 @@ export async function extractRecipeFromImage(
   };
 }
 
-function isRealExtractedRecipe(data: any): boolean {
-  if (!data || !data.title || !Array.isArray(data.ingredients) || data.ingredients.length === 0) {
-    return false;
-  }
-  const firstIngName = String(data.ingredients[0]?.name || '');
-  if (
-    firstIngName.includes('Ingredienser (justera vid behov)') ||
-    firstIngName.includes('Se ingredienser på länken') ||
-    firstIngName.includes('Se receptlänk för ingredienser')
-  ) {
-    return false;
-  }
-  return true;
-}
-
 export async function extractRecipeFromUrl(url: string): Promise<any> {
   const cleanUrl = url.trim();
 
-  // 1. Try direct client-side extraction via Jina Reader / CORS proxies first
-  const fetchedTexts = await fetchUrlContentClientSide(cleanUrl);
-  for (const rawContent of fetchedTexts) {
-    const extracted = parseRecipeFromHtmlOrText(rawContent, cleanUrl);
-    if (isRealExtractedRecipe(extracted)) {
-      return extracted;
-    }
+  // 1. Run parallel client-side extraction (Jina Reader + AllOrigins + CodeTabs)
+  const parallelExtracted = await extractRecipeClientSideParallel(cleanUrl);
+  if (isRealExtractedRecipe(parallelExtracted)) {
+    return parallelExtracted;
   }
 
   // 2. Try server endpoint (parses JSON-LD + Jina Reader + HTML on backend)
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8500);
+    const timer = setTimeout(() => ctrl.abort(), 12000);
     const res = await fetch(getApiUrl('/api/recipes/extract-url'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

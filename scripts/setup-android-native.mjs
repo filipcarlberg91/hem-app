@@ -879,6 +879,11 @@ import android.webkit.JavascriptInterface;
 
 import org.json.JSONArray;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -889,6 +894,39 @@ public class HemNativeBridge {
     public HemNativeBridge(MainActivity activity) {
         this.mainActivity = activity;
         this.appContext = activity.getApplicationContext();
+    }
+
+    @JavascriptInterface
+    public String fetchUrlHtml(String urlStr) {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(urlStr);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setInstanceFollowRedirects(true);
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36");
+            conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            conn.setRequestProperty("Accept-Language", "sv-SE,sv;q=0.9,en;q=0.8");
+            int code = conn.getResponseCode();
+            if (code < 200 || code >= 400) return "";
+            InputStream is = conn.getInputStream();
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) != -1) {
+                baos.write(buf, 0, n);
+            }
+            is.close();
+            return new String(baos.toByteArray(), StandardCharsets.UTF_8);
+        } catch (Throwable ignored) {
+            return "";
+        } finally {
+            if (conn != null) {
+                try { conn.disconnect(); } catch (Throwable ignored) {}
+            }
+        }
     }
 
     @JavascriptInterface
