@@ -447,37 +447,75 @@ export default function App() {
     const h = (window.location.hash || '').replace('#', '').toLowerCase();
     return h === 'screensaver' || h === 'skarmslackare';
   });
-  const [screensaverIdleMinutes, setScreensaverIdleMinutes] = useState<number>(() =>
-    loadFromStorage<number>('vn_screensaver_idle_mins_v1', 5)
-  );
+  const [screensaverIdleMinutes, setScreensaverIdleMinutes] = useState<number>(() => {
+    const isSmallScreenUnder7Inch =
+      typeof window !== 'undefined' &&
+      Math.min(window.screen?.width || window.innerWidth, window.screen?.height || window.innerHeight) < 600;
+    return loadFromStorage<number>(
+      'vn_screensaver_idle_mins_v2',
+      isSmallScreenUnder7Inch ? 0 : 0
+    );
+  });
 
   useEffect(() => {
     localStorage.setItem(
-      'vn_screensaver_idle_mins_v1',
+      'vn_screensaver_idle_mins_v2',
       JSON.stringify(screensaverIdleMinutes)
     );
   }, [screensaverIdleMinutes]);
 
-  // Automatic Screensaver Activation when Tablet is Idle
+  // Automatic Screensaver Activation ONLY while the app is continuously open and visible in foreground
   useEffect(() => {
     if (!currentAccount || screensaverIdleMinutes <= 0 || showScreensaver) return;
-    let idleTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    const resetIdleTimer = () => {
-      if (idleTimeout) clearTimeout(idleTimeout);
-      idleTimeout = setTimeout(() => {
-        setShowScreensaver(true);
-      }, screensaverIdleMinutes * 60 * 1000);
+    let lastActiveAt = Date.now();
+    let lastTickAt = Date.now();
+
+    const markUserActive = () => {
+      lastActiveAt = Date.now();
+      lastTickAt = Date.now();
     };
 
-    resetIdleTimer();
+    const handleVisibilityOrFocus = () => {
+      // Whenever the app returns from background/closed state or loses visibility, reset idle clock to 0
+      lastActiveAt = Date.now();
+      lastTickAt = Date.now();
+    };
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      // If the app/WebView was suspended in the background (gap > 15s), reset idle timer so it never fires on resume
+      if (
+        document.visibilityState !== 'visible' ||
+        (typeof document.hasFocus === 'function' && !document.hasFocus()) ||
+        now - lastTickAt > 15000
+      ) {
+        lastActiveAt = now;
+        lastTickAt = now;
+        return;
+      }
+      lastTickAt = now;
+      if (now - lastActiveAt >= screensaverIdleMinutes * 60 * 1000) {
+        setShowScreensaver(true);
+      }
+    }, 5000);
+
     const eventsToWatch = ['pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll'];
     eventsToWatch.forEach((ev) =>
-      window.addEventListener(ev, resetIdleTimer, { passive: true })
+      window.addEventListener(ev, markUserActive, { passive: true })
     );
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    window.addEventListener('blur', handleVisibilityOrFocus);
+    window.addEventListener('pageshow', handleVisibilityOrFocus);
+
     return () => {
-      if (idleTimeout) clearTimeout(idleTimeout);
-      eventsToWatch.forEach((ev) => window.removeEventListener(ev, resetIdleTimer));
+      clearInterval(interval);
+      eventsToWatch.forEach((ev) => window.removeEventListener(ev, markUserActive));
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('blur', handleVisibilityOrFocus);
+      window.removeEventListener('pageshow', handleVisibilityOrFocus);
     };
   }, [currentAccount, screensaverIdleMinutes, showScreensaver]);
 

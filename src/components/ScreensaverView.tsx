@@ -172,10 +172,10 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     'auto' | 'force-night' | 'force-day'
   >('auto');
 
-  // Mobile (< 7 inch / < md:) active widget tab so phone screens fit cleanly without awkward full-page scrolling
+  // Mobile (< 7 inch / < md:) active widget tab: defaults to 'all' (Översikt) so there is never a giant empty space
   const [mobileActiveWidget, setMobileActiveWidget] = useState<
-    'shopping' | 'calendar' | 'todo' | 'kitchen'
-  >('shopping');
+    'all' | 'shopping' | 'calendar' | 'todo' | 'kitchen'
+  >('all');
 
   // Recipe & Kitchen Mode state
   const [selectedRecipeIdx, setSelectedRecipeIdx] = useState<number>(0);
@@ -457,7 +457,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     return (
       <div
         data-no-pull-refresh="true"
-        className="fixed inset-0 z-50 bg-[#050605] text-[#8BB89E] flex flex-col justify-between p-4 sm:p-8 md:p-10 select-none overflow-hidden"
+        className="fixed inset-0 z-50 bg-[#050605] text-[#8BB89E] flex flex-col justify-between px-4 sm:px-8 md:px-10 pt-[max(env(safe-area-inset-top,0px)+12px,44px)] md:pt-8 pb-[max(env(safe-area-inset-bottom,0px)+12px,20px)] md:pb-8 select-none overflow-hidden"
       >
         {/* Top subtle status row */}
         <div className="flex items-center justify-between gap-2 text-[11px] sm:text-sm text-[#5E7E6B]">
@@ -541,7 +541,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
   return (
     <div
       data-no-pull-refresh="true"
-      className="fixed inset-0 z-50 bg-[#F4F6F3] text-[#141E18] flex flex-col h-dvh p-2.5 sm:p-4 lg:p-6 overflow-hidden"
+      className="fixed inset-0 z-50 bg-[#F4F6F3] text-[#141E18] flex flex-col h-dvh px-2.5 sm:px-4 lg:px-6 pt-[max(env(safe-area-inset-top,0px)+10px,42px)] md:pt-4 lg:pt-6 pb-[max(env(safe-area-inset-bottom,0px)+10px,16px)] md:pb-4 lg:pb-6 overflow-y-auto md:overflow-hidden"
     >
       {/* ====================================================================
           TOP SECTION:
@@ -638,10 +638,12 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           </div>
         </div>
 
-        {/* Top Right Card (7"+ Tablets always visible; on Phones visible when "Kök & Timer" tab is selected) */}
+        {/* Top Right Card (7"+ Tablets always visible; on Phones visible when "Alla" or "Kök" tab is selected) */}
         <div
           className={`${
-            mobileActiveWidget === 'kitchen' ? 'flex' : 'hidden md:flex'
+            mobileActiveWidget === 'kitchen' || mobileActiveWidget === 'all'
+              ? 'flex'
+              : 'hidden md:flex'
           } md:col-span-5 rounded-[24px] sm:rounded-[28px] m3-secondary-surface border p-3.5 sm:p-5 flex-col justify-between shadow-xs`}
         >
           <div className="flex items-start justify-between gap-2">
@@ -794,12 +796,17 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
 
       {/* ====================================================================
           MOBILE WIDGET SWITCHER BAR (< 7 inch screens / md:hidden)
-          Lets phone users switch cleanly between Inköp, Agenda, Att göra & Kök
-          while keeping the entire screensaver inside 100dvh!
+          No truncation: horizontal pill bar with "Alla", "Inköp", "Agenda", "Att göra", "Kök"
          ==================================================================== */}
-      <div className="mt-2.5 grid grid-cols-4 gap-1.5 md:hidden shrink-0">
+      <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar md:hidden shrink-0 pb-0.5">
         {(
           [
+            {
+              id: 'all',
+              label: 'Alla',
+              badge: null,
+              icon: Maximize2,
+            },
             {
               id: 'shopping',
               label: 'Inköp',
@@ -833,14 +840,14 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
               key={tab.id}
               type="button"
               onClick={() => setMobileActiveWidget(tab.id)}
-              className={`min-h-[42px] rounded-2xl px-2 py-1.5 text-xs font-extrabold flex items-center justify-center gap-1.5 border transition-all ${
+              className={`min-h-[38px] rounded-2xl px-2.5 py-1.5 text-[11px] font-extrabold flex items-center justify-center gap-1.5 border whitespace-nowrap shrink-0 transition-all ${
                 active
                   ? 'bg-[#163A2B] border-[#163A2B] text-[#A6F2C6] shadow-xs'
                   : 'bg-white border-[#DCE3DD] text-[#141E18]'
               }`}
             >
               <Icon className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{tab.label}</span>
+              <span>{tab.label}</span>
               {tab.badge !== null && tab.badge !== 0 && (
                 <span
                   className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono tabular-nums ${
@@ -860,17 +867,18 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
       {/* ====================================================================
           BOTTOM ROW:
           - On 7"+ Tablets (md:grid-cols-3): All 3 Scrollable Widgets side-by-side
-          - On Phones (< md): Shows the currently selected scrollable widget
-            filling the rest of the phone screen cleanly
+          - On Phones (< md): Shows natural-height cards in "Alla" or the selected widget without empty white void
          ==================================================================== */}
-      <div className="mt-2.5 sm:mt-3.5 flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 overflow-hidden">
+      <div className="mt-2.5 sm:mt-3.5 md:flex-1 md:min-h-0 grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-4 md:overflow-hidden pb-2 md:pb-0">
         {/* ================================================================
             WIDGET 1: KOMMANDE AGENDA (KALENDER) - Scrollable + Add/Check-off
            ================================================================ */}
         <section
           className={`${
-            mobileActiveWidget === 'calendar' ? 'flex' : 'hidden md:flex'
-          } rounded-[24px] sm:rounded-[26px] bg-white border border-[#DCE3DD] p-3.5 sm:p-4 flex-col min-h-0 h-full overflow-hidden shadow-2xs`}
+            mobileActiveWidget === 'calendar' || mobileActiveWidget === 'all'
+              ? 'flex'
+              : 'hidden md:flex'
+          } rounded-[24px] sm:rounded-[26px] bg-white border border-[#DCE3DD] p-3.5 sm:p-4 flex-col md:min-h-0 md:h-full overflow-hidden shadow-2xs`}
         >
           <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[#E9EFEA] shrink-0">
             <div className="flex items-center gap-2 min-w-0">
@@ -934,7 +942,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           )}
 
           {/* Scrollable Event List */}
-          <div className="mt-2.5 flex-1 min-h-0 overflow-y-auto pr-1 space-y-2">
+          <div className="mt-2.5 max-h-[280px] md:max-h-none md:flex-1 md:min-h-0 overflow-y-auto pr-1 space-y-2">
             {upcomingEvents.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center py-8 px-4">
                 <Calendar className="h-8 w-8 text-[#94A89B] mb-2" />
@@ -1009,8 +1017,10 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
            ================================================================ */}
         <section
           className={`${
-            mobileActiveWidget === 'shopping' ? 'flex' : 'hidden md:flex'
-          } rounded-[24px] sm:rounded-[26px] bg-white border border-[#DCE3DD] p-3.5 sm:p-4 flex-col min-h-0 h-full overflow-hidden shadow-2xs`}
+            mobileActiveWidget === 'shopping' || mobileActiveWidget === 'all'
+              ? 'flex'
+              : 'hidden md:flex'
+          } order-first md:order-none rounded-[24px] sm:rounded-[26px] bg-white border border-[#DCE3DD] p-3.5 sm:p-4 flex-col md:min-h-0 md:h-full overflow-hidden shadow-2xs`}
         >
           <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[#E9EFEA] shrink-0">
             <div className="flex items-center gap-2 min-w-0">
@@ -1068,7 +1078,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           </form>
 
           {/* Scrollable Shopping Items List */}
-          <div className="mt-2.5 flex-1 min-h-0 overflow-y-auto pr-1 space-y-1.5">
+          <div className="mt-2.5 max-h-[280px] md:max-h-none md:flex-1 md:min-h-0 overflow-y-auto pr-1 space-y-1.5">
             {sortedShopping.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center py-8 px-4">
                 <ShoppingCart className="h-8 w-8 text-[#94A89B] mb-2" />
@@ -1120,8 +1130,10 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
            ================================================================ */}
         <section
           className={`${
-            mobileActiveWidget === 'todo' ? 'flex' : 'hidden md:flex'
-          } rounded-[24px] sm:rounded-[26px] bg-white border border-[#DCE3DD] p-3.5 sm:p-4 flex-col min-h-0 h-full overflow-hidden shadow-2xs`}
+            mobileActiveWidget === 'todo' || mobileActiveWidget === 'all'
+              ? 'flex'
+              : 'hidden md:flex'
+          } rounded-[24px] sm:rounded-[26px] bg-white border border-[#DCE3DD] p-3.5 sm:p-4 flex-col md:min-h-0 md:h-full overflow-hidden shadow-2xs`}
         >
           <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[#E9EFEA] shrink-0">
             <div className="flex items-center gap-2 min-w-0">
@@ -1198,7 +1210,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           )}
 
           {/* Unified Scrollable List of Todos + Interactive Notes */}
-          <div className="mt-2.5 flex-1 min-h-0 overflow-y-auto pr-1 space-y-2">
+          <div className="mt-2.5 max-h-[280px] md:max-h-none md:flex-1 md:min-h-0 overflow-y-auto pr-1 space-y-2">
             {/* 1. Todos Section */}
             {rightColumnFilter !== 'notes' &&
               sortedTodos.map((todo) => (
