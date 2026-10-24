@@ -4482,6 +4482,8 @@ export default function App() {
         notes={notes}
         shopping={shopping}
         recipes={recipes}
+        photos={photos}
+        photoAlbums={photoAlbums}
         memberName={memberName}
         idleMinutes={screensaverIdleMinutes}
         onChangeIdleMinutes={setScreensaverIdleMinutes}
