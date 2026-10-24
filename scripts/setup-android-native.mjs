@@ -1005,6 +1005,37 @@ public class HemNativeBridge {
     }
 
     @JavascriptInterface
+    public boolean sendMediaControl(String cmd) {
+        if (appContext == null) return false;
+        try {
+            android.media.AudioManager am = (android.media.AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
+            if (am == null) return false;
+            if ("vol_up".equals(cmd)) {
+                am.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_RAISE, android.media.AudioManager.FLAG_SHOW_UI);
+                return true;
+            }
+            if ("vol_down".equals(cmd)) {
+                am.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_LOWER, android.media.AudioManager.FLAG_SHOW_UI);
+                return true;
+            }
+            int keyCode = android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
+            if ("next".equals(cmd)) keyCode = android.view.KeyEvent.KEYCODE_MEDIA_NEXT;
+            else if ("prev".equals(cmd)) keyCode = android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS;
+            else if ("play".equals(cmd)) keyCode = android.view.KeyEvent.KEYCODE_MEDIA_PLAY;
+            else if ("pause".equals(cmd)) keyCode = android.view.KeyEvent.KEYCODE_MEDIA_PAUSE;
+
+            long eventTime = android.os.SystemClock.uptimeMillis();
+            android.view.KeyEvent downEvent = new android.view.KeyEvent(eventTime, eventTime, android.view.KeyEvent.ACTION_DOWN, keyCode, 0);
+            am.dispatchMediaKeyEvent(downEvent);
+            android.view.KeyEvent upEvent = new android.view.KeyEvent(eventTime, eventTime, android.view.KeyEvent.ACTION_UP, keyCode, 0);
+            am.dispatchMediaKeyEvent(upEvent);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    @JavascriptInterface
     public boolean requestCameraPermission() {
         if (mainActivity == null) return false;
         return mainActivity.ensureCameraPermission(false);

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calendar,
   Check,
@@ -17,8 +17,10 @@ import {
   Grid,
   Lightbulb,
   LightbulbOff,
+  ListMusic,
   Maximize2,
   Moon,
+  Music,
   Pause,
   Play,
   Plus,
@@ -26,10 +28,14 @@ import {
   RotateCcw,
   Settings,
   ShoppingCart,
+  SkipBack,
+  SkipForward,
   Sliders,
   Sun,
   Timer,
   Trash2,
+  Volume1,
+  Volume2,
   Wifi,
   Wind,
   X,
@@ -63,6 +69,21 @@ import {
   updateAllHueRoomsAction,
   updateHueRoomAction,
 } from '../utils/philipsHueClient';
+import {
+  fetchSpotifyConnectNowPlaying,
+  fetchUserSpotifyPlaylists,
+  loadSelectedSpotifyPlaylistId,
+  loadSpotifyAccessToken,
+  loadSpotifyPlaylists,
+  parseSpotifyInputToPlaylistItem,
+  saveSelectedSpotifyPlaylistId,
+  saveSpotifyAccessToken,
+  saveSpotifyPlaylists,
+  sendNativeAndroidMediaControl,
+  sendSpotifyConnectCommand,
+  SpotifyNowPlaying,
+  SpotifyPlaylistItem,
+} from '../utils/spotifyClient';
 
 interface ScreensaverViewProps {
   open: boolean;
@@ -211,7 +232,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     return 'dark';
   });
 
-  // Screen brightness / dimmer percentage (100, 80, 60, 40) for comfortable evening tablet viewing
+  // Screen brightness / dimmer percentage (100, 80, 60, 40)
   const [dimmerPercent, setDimmerPercent] = useState<number>(() => {
     try {
       const saved = Number(localStorage.getItem(SCREENSAVER_DIMMER_KEY));
@@ -245,10 +266,271 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
 
   // Mobile (< 7 inch / < md:) active widget tab
   const [mobileActiveWidget, setMobileActiveWidget] = useState<
-    'all' | 'hue' | 'shopping' | 'calendar' | 'todo' | 'kitchen'
+    'all' | 'spotify' | 'hue' | 'shopping' | 'calendar' | 'todo' | 'kitchen'
   >('all');
 
-  // Philips Hue state
+  // Top-right card mode on 7"+ tablets: 'spotify' (default!) or 'kitchen'
+  const [topRightTab, setTopRightTab] = useState<'spotify' | 'kitchen'>('spotify');
+
+  // ==========================================================================
+  // SPOTIFY STATE (Exclusively in Screensaver!)
+  // ==========================================================================
+  const [spotifyPlaylists, setSpotifyPlaylists] = useState<SpotifyPlaylistItem[]>(() =>
+    loadSpotifyPlaylists()
+  );
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>(() =>
+    loadSelectedSpotifyPlaylistId()
+  );
+  const [isSpotifyPlaying, setIsSpotifyPlaying] = useState<boolean>(false);
+  const [spotifyTrackInfo, setSpotifyTrackInfo] = useState<string>('');
+  const [spotifyExpandModalOpen, setSpotifyExpandModalOpen] = useState<boolean>(false);
+  const [spotifySettingsOpen, setSpotifySettingsOpen] = useState<boolean>(false);
+  const [newPlaylistName, setNewPlaylistName] = useState<string>('');
+  const [newPlaylistUrl, setNewPlaylistUrl] = useState<string>('');
+  const [playlistAddError, setPlaylistAddError] = useState<string>('');
+  const [spotifyToken, setSpotifyToken] = useState<string>(() =>
+    loadSpotifyAccessToken()
+  );
+  const [spotifyNowPlaying, setSpotifyNowPlaying] =
+    useState<SpotifyNowPlaying | null>(null);
+  const [spotifySyncBusy, setSpotifySyncBusy] = useState<boolean>(false);
+
+  const spotifyEmbedMountRef = useRef<HTMLDivElement | null>(null);
+  const spotifyControllerRef = useRef<any>(null);
+  const [spotifyIframeApiReady, setSpotifyIframeApiReady] = useState<boolean>(false);
+
+  const selectedPlaylist = useMemo(() => {
+    return (
+      spotifyPlaylists.find((p) => p.id === selectedPlaylistId) ||
+      spotifyPlaylists[0]
+    );
+  }, [spotifyPlaylists, selectedPlaylistId]);
+
+  // Load official Spotify IFrame API for programmatic Play/Pause & Playlist switching
+  useEffect(() => {
+    if (!open) return;
+    const w = window as any;
+    if (w.SpotifyIframeApi) {
+      setSpotifyIframeApiReady(true);
+      return;
+    }
+    const prevCallback = w.onSpotifyIframeApiReady;
+    w.onSpotifyIframeApiReady = (IFrameAPI: any) => {
+      w.SpotifyIframeApi = IFrameAPI;
+      setSpotifyIframeApiReady(true);
+      if (typeof prevCallback === 'function') prevCallback(IFrameAPI);
+    };
+    if (!document.getElementById('spotify-iframe-api-script')) {
+      const script = document.createElement('script');
+      script.id = 'spotify-iframe-api-script';
+      script.src = 'https://open.spotify.com/embed/iframe-api/v1';
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, [open]);
+
+  // Initialize Spotify Embed Controller when API & container are ready
+  useEffect(() => {
+    if (
+      !open ||
+      !spotifyIframeApiReady ||
+      !spotifyEmbedMountRef.current ||
+      !selectedPlaylist
+    ) {
+      return;
+    }
+    const w = window as any;
+    if (!w.SpotifyIframeApi) return;
+
+    if (spotifyControllerRef.current) {
+      try {
+        spotifyControllerRef.current.loadUri(selectedPlaylist.spotifyUri);
+      } catch {
+        // Ignore
+      }
+      return;
+    }
+
+    try {
+      w.SpotifyIframeApi.createController(
+        spotifyEmbedMountRef.current,
+        {
+          uri: selectedPlaylist.spotifyUri,
+          width: '100%',
+          height: 80,
+          theme: '0',
+        },
+        (EmbedController: any) => {
+          spotifyControllerRef.current = EmbedController;
+          EmbedController.addListener('playback_update', (e: any) => {
+            if (e?.data) {
+              setIsSpotifyPlaying(!e.data.isPaused);
+            }
+          });
+        }
+      );
+    } catch {
+      // Fallback iframe is used if createController fails
+    }
+  }, [open, spotifyIframeApiReady, selectedPlaylist]);
+
+  // Clean up controller ref when closing screensaver
+  useEffect(() => {
+    if (!open) {
+      spotifyControllerRef.current = null;
+    }
+  }, [open]);
+
+  // Poll Spotify Connect Now Playing if user has connected a Spotify token
+  useEffect(() => {
+    if (!open || !spotifyToken) return;
+    let active = true;
+    const poll = async () => {
+      const np = await fetchSpotifyConnectNowPlaying(spotifyToken);
+      if (active && np) {
+        setSpotifyNowPlaying(np);
+        setIsSpotifyPlaying(np.isPlaying);
+        if (np.trackTitle) {
+          setSpotifyTrackInfo(
+            `${np.trackTitle}${np.artistName ? ` · ${np.artistName}` : ''}`
+          );
+        }
+      }
+    };
+    poll();
+    const timer = setInterval(poll, 6000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [open, spotifyToken]);
+
+  const handleSelectSpotifyPlaylist = async (playlist: SpotifyPlaylistItem) => {
+    setSelectedPlaylistId(playlist.id);
+    saveSelectedSpotifyPlaylistId(playlist.id);
+    setSpotifyTrackInfo(`${playlist.name} · ${playlist.subtitle}`);
+
+    if (spotifyControllerRef.current) {
+      try {
+        spotifyControllerRef.current.loadUri(playlist.spotifyUri);
+        spotifyControllerRef.current.play();
+        setIsSpotifyPlaying(true);
+      } catch {
+        // Ignore
+      }
+    }
+
+    if (spotifyToken) {
+      await sendSpotifyConnectCommand(
+        spotifyToken,
+        'play-uri',
+        playlist.spotifyUri
+      );
+    }
+  };
+
+  const handleSpotifyTogglePlayPause = async () => {
+    const nextState = !isSpotifyPlaying;
+    setIsSpotifyPlaying(nextState);
+
+    if (spotifyControllerRef.current) {
+      try {
+        spotifyControllerRef.current.togglePlay();
+      } catch {
+        // Ignore
+      }
+    }
+
+    sendNativeAndroidMediaControl('play_pause');
+
+    if (spotifyToken) {
+      await sendSpotifyConnectCommand(
+        spotifyToken,
+        nextState ? 'play' : 'pause'
+      );
+    }
+  };
+
+  const handleSpotifyPrevTrack = async () => {
+    sendNativeAndroidMediaControl('prev');
+    if (spotifyToken) {
+      await sendSpotifyConnectCommand(spotifyToken, 'prev');
+    } else if (spotifyControllerRef.current) {
+      try {
+        spotifyControllerRef.current.seek(0);
+      } catch {
+        // Ignore
+      }
+    }
+  };
+
+  const handleSpotifyNextTrack = async () => {
+    const sentNative = sendNativeAndroidMediaControl('next');
+    if (spotifyToken) {
+      await sendSpotifyConnectCommand(spotifyToken, 'next');
+    } else if (!sentNative && spotifyPlaylists.length > 1) {
+      const idx = spotifyPlaylists.findIndex((p) => p.id === selectedPlaylist.id);
+      const nextPl = spotifyPlaylists[(idx + 1) % spotifyPlaylists.length];
+      handleSelectSpotifyPlaylist(nextPl);
+    }
+  };
+
+  const handleAddCustomPlaylist = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPlaylistAddError('');
+    const parsed = parseSpotifyInputToPlaylistItem(
+      newPlaylistName || 'Min Spellista',
+      newPlaylistUrl,
+      'Egen spellista'
+    );
+    if (!parsed) {
+      setPlaylistAddError(
+        'Kunde inte tolka länken. Klistra in en Spotify-länk (t.ex. https://open.spotify.com/playlist/...) eller URI.'
+      );
+      return;
+    }
+    const next = [parsed, ...spotifyPlaylists];
+    setSpotifyPlaylists(next);
+    saveSpotifyPlaylists(next);
+    setSelectedPlaylistId(parsed.id);
+    saveSelectedSpotifyPlaylistId(parsed.id);
+    setNewPlaylistName('');
+    setNewPlaylistUrl('');
+  };
+
+  const handleDeleteSpotifyPlaylist = (id: string) => {
+    if (spotifyPlaylists.length <= 1) return;
+    const next = spotifyPlaylists.filter((p) => p.id !== id);
+    setSpotifyPlaylists(next);
+    saveSpotifyPlaylists(next);
+    if (selectedPlaylistId === id && next[0]) {
+      setSelectedPlaylistId(next[0].id);
+      saveSelectedSpotifyPlaylistId(next[0].id);
+    }
+  };
+
+  const handleFetchPersonalPlaylistsFromToken = async () => {
+    if (!spotifyToken.trim()) return;
+    setSpotifySyncBusy(true);
+    saveSpotifyAccessToken(spotifyToken.trim());
+    const fetched = await fetchUserSpotifyPlaylists(spotifyToken.trim());
+    setSpotifySyncBusy(false);
+    if (fetched.length > 0) {
+      const existingIds = new Set(spotifyPlaylists.map((p) => p.spotifyUri));
+      const merged = [
+        ...fetched.filter((f) => !existingIds.has(f.spotifyUri)),
+        ...spotifyPlaylists,
+      ];
+      setSpotifyPlaylists(merged);
+      saveSpotifyPlaylists(merged);
+      setSelectedPlaylistId(merged[0].id);
+      saveSelectedSpotifyPlaylistId(merged[0].id);
+    }
+  };
+
+  // ==========================================================================
+  // PHILIPS HUE & APP SHORTCUTS STATE
+  // ==========================================================================
   const [hueConfig, setHueConfig] = useState<HueConfig>(() => loadHueConfig());
   const [hueRooms, setHueRooms] = useState<HueRoom[]>([]);
   const [hueIsLive, setHueIsLive] = useState<boolean>(false);
@@ -258,7 +540,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
   const [huePairingBusy, setHuePairingBusy] = useState<boolean>(false);
   const [newDemoRoomName, setNewDemoRoomName] = useState<string>('');
 
-  // External App Shortcuts state
   const [appShortcuts, setAppShortcuts] = useState<ExternalAppShortcut[]>(() =>
     loadAppShortcuts()
   );
@@ -304,7 +585,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     setHueIsLive(res.isLive);
   }, [hueConfig]);
 
-  // Load and poll Philips Hue state while screensaver is open
   useEffect(() => {
     if (!open) return;
     refreshHueRooms();
@@ -314,7 +594,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     return () => clearInterval(interval);
   }, [open, refreshHueRooms]);
 
-  // Update clock every second
   useEffect(() => {
     if (!open) return;
     setNow(new Date());
@@ -330,7 +609,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     return () => clearInterval(interval);
   }, [open]);
 
-  // Keep tablet/phone screen awake via Screen Wake Lock API + Android Native FLAG_KEEP_SCREEN_ON
   useEffect(() => {
     if (!open) {
       setNativeKeepScreenOn(false);
@@ -344,7 +622,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
         }
       } catch {
-        // Ignore wakeLock permission errors in restricted browsers/iframes
+        // Ignore
       }
     };
     requestWakeLock();
@@ -364,7 +642,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     };
   }, [open]);
 
-  // Fetch live Gothenburg weather
   useEffect(() => {
     if (!open) return;
     let active = true;
@@ -406,7 +683,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     };
   }, [open]);
 
-  // Kitchen countdown timer effect
   useEffect(() => {
     if (!timerRunning || timerSecondsLeft <= 0) return;
     const t = setInterval(() => {
@@ -422,13 +698,16 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     return () => clearInterval(t);
   }, [timerRunning, timerSecondsLeft]);
 
-  // Close on Escape key
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (kitchenModeOpen) {
           setKitchenModeOpen(false);
+        } else if (spotifyExpandModalOpen) {
+          setSpotifyExpandModalOpen(false);
+        } else if (spotifySettingsOpen) {
+          setSpotifySettingsOpen(false);
         } else if (hueSettingsOpen) {
           setHueSettingsOpen(false);
         } else if (appsModalOpen) {
@@ -440,7 +719,15 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, kitchenModeOpen, hueSettingsOpen, appsModalOpen, onClose]);
+  }, [
+    open,
+    kitchenModeOpen,
+    spotifyExpandModalOpen,
+    spotifySettingsOpen,
+    hueSettingsOpen,
+    appsModalOpen,
+    onClose,
+  ]);
 
   const orderedRecipes = useMemo(() => {
     return [...recipes].sort((a, b) => Number(b.favorite) - Number(a.favorite));
@@ -616,7 +903,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     const newEntry: ExternalAppShortcut = {
       id: `app-custom-${Date.now()}`,
       name: nameTrim,
-      category: newAppCategory || 'Genomslag',
+      category: newAppCategory || 'Genväg',
       deepLink: normalizedUrl,
       webUrl: normalizedUrl,
       accentColor: '#A6F2C6',
@@ -684,7 +971,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
   const activeHueLightsCount = hueRooms.filter((r) => r.on).length;
 
   // ============================================================================
-  // MINIMAL NIGHT CLOCK MODE (Only when explicitly chosen via "Nattklocka")
+  // MINIMAL NIGHT CLOCK MODE (Only when explicitly chosen via "Klocka")
   // ============================================================================
   if (isNightClockActive) {
     const nextEvent = upcomingEvents[0];
@@ -694,7 +981,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
         style={{ filter: `brightness(${dimmerPercent}%)` }}
         className="fixed inset-0 z-50 bg-[#050605] text-[#8BB89E] flex flex-col justify-between px-4 sm:px-8 md:px-10 pt-[max(env(safe-area-inset-top,0px)+12px,44px)] md:pt-8 pb-[max(env(safe-area-inset-bottom,0px)+12px,20px)] md:pb-8 select-none overflow-hidden"
       >
-        {/* Top subtle status row */}
         <div className="flex items-center justify-between gap-2 text-[11px] sm:text-sm text-[#5E7E6B]">
           <div className="flex items-center gap-1.5 sm:gap-2 truncate">
             <Moon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#739E84] shrink-0" />
@@ -710,7 +996,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           </div>
         </div>
 
-        {/* Center Giant Low-Luminance Clock */}
         <div
           style={{
             transform: `translate(${pixelShift.x}px, ${pixelShift.y}px)`,
@@ -740,7 +1025,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
             </div>
           )}
 
-          {/* Quick Philips Hue Night Controls right inside Night Clock */}
+          {/* Quick Philips Hue & Spotify Night Controls right inside Night Clock */}
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
@@ -748,20 +1033,23 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
               className="rounded-2xl bg-[#0D130F] hover:bg-[#152119] border border-[#1E2E24] px-3.5 py-2 text-xs font-bold text-[#8BB89E] flex items-center gap-1.5 transition-colors"
             >
               <LightbulbOff className="h-3.5 w-3.5 text-[#FACC15]" />
-              <span>Släck alla Hue ({activeHueLightsCount} på)</span>
+              <span>Släck Hue ({activeHueLightsCount} på)</span>
             </button>
             <button
               type="button"
-              onClick={() => handleHueScenePreset('evening')}
+              onClick={handleSpotifyTogglePlayPause}
               className="rounded-2xl bg-[#0D130F] hover:bg-[#152119] border border-[#1E2E24] px-3.5 py-2 text-xs font-bold text-[#8BB89E] flex items-center gap-1.5 transition-colors"
             >
-              <Lightbulb className="h-3.5 w-3.5 text-[#FACC15]" />
-              <span>Nattljus (25%)</span>
+              {isSpotifyPlaying ? (
+                <Pause className="h-3.5 w-3.5 text-[#1ED760]" />
+              ) : (
+                <Play className="h-3.5 w-3.5 text-[#1ED760]" />
+              )}
+              <span>Spotify: {selectedPlaylist?.name || 'Spela/Pausa'}</span>
             </button>
           </div>
         </div>
 
-        {/* Bottom discreet controls */}
         <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#121A15]">
           <div className="flex items-center gap-2">
             <button
@@ -795,13 +1083,12 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
   }
 
   // ============================================================================
-  // ALLTID-PÅ HUSHÅLLSTAVLA (Med äkta Mörkerläge, Philips Hue & App-genvägar!)
+  // ALLTID-PÅ HUSHÅLLSTAVLA (Med Mörkerläge, Philips Hue & Spotify!)
   // ============================================================================
   const uncheckedShoppingCount = shopping.filter((s) => !s.checked).length;
   const checkedShoppingCount = shopping.filter((s) => s.checked).length;
   const openTodosCount = todos.filter((t) => !t.completed).length;
 
-  // Dynamic surface classes for Dark Mode vs Light Mode
   const rootSurfaceClass = isDarkDashboard
     ? 'bg-[#090F0C] text-[#E6F2EB]'
     : 'bg-[#F4F6F3] text-[#141E18]';
@@ -823,24 +1110,24 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     <div
       data-no-pull-refresh="true"
       style={{ filter: `brightness(${dimmerPercent}%)` }}
-      className={`fixed inset-0 z-50 ${rootSurfaceClass} flex flex-col h-dvh px-2.5 sm:px-4 lg:px-5 pt-[max(env(safe-area-inset-top,0px)+10px,40px)] md:pt-3.5 lg:pt-5 pb-[max(env(safe-area-inset-bottom,0px)+10px,14px)] md:pb-3.5 lg:pb-5 overflow-y-auto md:overflow-hidden transition-colors duration-300`}
+      className={`fixed inset-0 z-50 ${rootSurfaceClass} flex flex-col h-dvh px-2.5 sm:px-4 lg:px-5 pt-[max(env(safe-area-inset-top,0px)+10px,40px)] md:pt-3.5 lg:pt-4 pb-[max(env(safe-area-inset-bottom,0px)+10px,14px)] md:pb-3.5 lg:pb-4 overflow-y-auto md:overflow-hidden transition-colors duration-300`}
     >
       {/* ====================================================================
           TOP SECTION (12 columns on 7"+ tablets):
-          - Col 1..5 (5 cols): Clock, Date, Gothenburg Weather, Mörkerläge/Dimmer & Auto-Idle
-          - Col 6..9 (4 cols): Philips Hue Lampor & Andra Appar (Smarta Hem-hubb)
-          - Col 10..12 (3 cols): Matsedel, Köksläge & Timer
+          - Col 1..4 (4 cols): Clock, Date, Gothenburg Weather, Mörkerläge/Dimmer
+          - Col 5..8 (4 cols): Philips Hue Lampor & Andra Appar
+          - Col 9..12 (4 cols): SPOTIFY (Spellistor & Mediakontroller) + Köksläge/Timer
          ==================================================================== */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 sm:gap-3 shrink-0">
-        {/* 1. Top Left Card: Clock, Weather & Mörkerläge Controls */}
+        {/* 1. Top Left Card (4 cols): Clock, Weather & Mörkerläge Controls */}
         <div
-          className={`md:col-span-5 rounded-[24px] sm:rounded-[26px] p-3.5 sm:p-4 flex flex-col justify-between border shadow-xs ${
+          className={`md:col-span-4 rounded-[24px] sm:rounded-[26px] p-3.5 sm:p-4 flex flex-col justify-between border shadow-xs ${
             isDarkDashboard
               ? 'bg-[#0F1F17] border-[#234233] text-[#E8F5ED]'
               : 'bg-[#163A2B] border-[#25543F] text-[#E8F5ED]'
           }`}
         >
-          <div className="flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center justify-between gap-2">
             {/* Clock + Date */}
             <div className="min-w-0">
               <div className="flex items-baseline gap-2">
@@ -857,35 +1144,28 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
             </div>
 
             {/* Live Gothenburg Weather Pill */}
-            <div className="rounded-2xl bg-[#1A3D2E] border border-[#2F634C] px-2.5 py-1.5 sm:px-3 sm:py-2 flex items-center gap-2 shrink-0">
+            <div className="rounded-2xl bg-[#1A3D2E] border border-[#2F634C] px-2.5 py-1.5 flex items-center gap-2 shrink-0">
               {getWeatherIcon(weather.weatherCode, 'h-5 w-5 sm:h-6 sm:w-6 shrink-0')}
               <div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-sm sm:text-lg font-extrabold font-mono tabular-nums text-white leading-none">
+                  <span className="text-sm sm:text-base font-extrabold font-mono tabular-nums text-white leading-none">
                     {weather.temperature}°C
                   </span>
-                  <span className="text-[10px] sm:text-xs font-bold text-[#A6F2C6]">
+                  <span className="text-[10px] font-bold text-[#A6F2C6]">
                     {weather.description}
                   </span>
                 </div>
-                <div className="mt-0.5 text-[10px] font-medium font-mono tabular-nums text-[#B6DEC6] flex items-center gap-1">
-                  <span>
-                    H:{weather.highTemp}° L:{weather.lowTemp}°
-                  </span>
-                  <span className="hidden xl:inline">·</span>
-                  <span className="hidden xl:inline-flex items-center gap-0.5">
-                    <Wind className="h-2.5 w-2.5" /> {weather.windSpeed} m/s
-                  </span>
+                <div className="mt-0.5 text-[10px] font-medium font-mono tabular-nums text-[#B6DEC6]">
+                  H:{weather.highTemp}° L:{weather.lowTemp}°
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Bottom Bar inside Top-Left Card: Mörkerläge / Ljust / Nattklocka + Dimmer + Auto-idle + Stäng */}
+          {/* Bottom Bar inside Top-Left Card: Mörkerläge / Ljust / Auto / Klocka + Dimmer + Stäng */}
           <div className="mt-2.5 pt-2.5 border-t border-[#25543F]/80 flex flex-wrap items-center justify-between gap-1.5">
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-              {/* Theme Switcher Segmented Control */}
-              <div className="flex items-center rounded-xl bg-[#0A1811] border border-[#25543F] p-0.5 text-[10px] sm:text-[11px] font-extrabold shrink-0">
+              <div className="flex items-center rounded-xl bg-[#0A1811] border border-[#25543F] p-0.5 text-[10px] font-extrabold shrink-0">
                 <button
                   type="button"
                   onClick={() => handleSelectThemeMode('dark')}
@@ -894,7 +1174,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                       ? 'bg-[#A6F2C6] text-[#0A1811]'
                       : 'text-[#B6DEC6] hover:text-white'
                   }`}
-                  title="Mörkerläge: Visar all information i ett mörkt, behagligt tema dygnet runt"
                 >
                   <Moon className="h-3 w-3 shrink-0" />
                   <span>Mörkt</span>
@@ -907,7 +1186,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                       ? 'bg-[#A6F2C6] text-[#0A1811]'
                       : 'text-[#B6DEC6] hover:text-white'
                   }`}
-                  title="Ljust läge"
                 >
                   <Sun className="h-3 w-3 shrink-0" />
                   <span>Ljust</span>
@@ -920,7 +1198,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                       ? 'bg-[#A6F2C6] text-[#0A1811]'
                       : 'text-[#B6DEC6] hover:text-white'
                   }`}
-                  title="Auto: Ljust 07–19, Mörkerläge med alla widgets 19–07"
                 >
                   Auto
                 </button>
@@ -932,24 +1209,21 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                       ? 'bg-[#A6F2C6] text-[#0A1811]'
                       : 'text-[#B6DEC6] hover:text-white'
                   }`}
-                  title="Minimalistisk Nattklocka"
                 >
                   Klocka
                 </button>
               </div>
 
-              {/* Dimmer button */}
               <button
                 type="button"
                 onClick={handleCycleDimmer}
-                className="min-h-[28px] rounded-xl bg-[#102B20] hover:bg-[#193D2E] border border-[#25543F] px-2 py-1 text-[10px] sm:text-[11px] font-mono tabular-nums font-bold text-[#A6F2C6] shrink-0"
+                className="min-h-[28px] rounded-xl bg-[#102B20] hover:bg-[#193D2E] border border-[#25543F] px-2 py-1 text-[10px] font-mono tabular-nums font-bold text-[#A6F2C6] shrink-0"
                 title="Dämpa skärmens ljusstyrka"
               >
                 ☀ {dimmerPercent}%
               </button>
 
-              {/* Auto-idle selector */}
-              <div className="hidden sm:flex items-center gap-0.5 rounded-xl bg-[#102B20] border border-[#25543F] px-1.5 py-0.5 text-[10px] text-[#B6DEC6] shrink-0">
+              <div className="hidden xl:flex items-center gap-0.5 rounded-xl bg-[#102B20] border border-[#25543F] px-1.5 py-0.5 text-[10px] text-[#B6DEC6] shrink-0">
                 <Clock className="h-3 w-3 text-[#A6F2C6] shrink-0" />
                 {([0, 2, 5, 10] as const).map((m) => (
                   <button
@@ -971,7 +1245,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[30px] rounded-xl bg-white/15 hover:bg-white/25 px-2.5 py-1 text-[11px] font-extrabold text-white flex items-center gap-1 shrink-0 transition-colors"
+              className="min-h-[28px] rounded-xl bg-white/15 hover:bg-white/25 px-2.5 py-1 text-[11px] font-extrabold text-white flex items-center gap-1 shrink-0 transition-colors"
             >
               <X className="h-3.5 w-3.5" />
               <span>Stäng</span>
@@ -979,7 +1253,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           </div>
         </div>
 
-        {/* 2. Top Middle Card: PHILIPS HUE BELYSNING & ANDRA APPAR */}
+        {/* 2. Top Middle Card (4 cols): PHILIPS HUE BELYSNING & ANDRA APPAR */}
         <div
           className={`${
             mobileActiveWidget === 'hue' || mobileActiveWidget === 'all'
@@ -987,7 +1261,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
               : 'hidden md:flex'
           } md:col-span-4 rounded-[24px] sm:rounded-[26px] border p-3.5 sm:p-4 flex-col justify-between shadow-xs ${cardSurfaceClass}`}
         >
-          {/* Header: Philips Hue + Quick Scene Presets + Setup Button */}
           <div className="flex items-center justify-between gap-1.5">
             <div className="flex items-center gap-2 min-w-0">
               <div
@@ -1024,7 +1297,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                     ? 'bg-[#1D2F25] hover:bg-[#273F32] text-[#FDE047]'
                     : 'bg-[#FEF9C3] hover:bg-[#FEF08A] text-[#854D0E]'
                 }`}
-                title="Mysbelysning (varmvit 60%)"
               >
                 Mys
               </button>
@@ -1036,7 +1308,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                     ? 'bg-[#1D2F25] hover:bg-[#273F32] text-[#96B8A4]'
                     : 'bg-[#E6EFE9] hover:bg-[#D5E6DC] text-[#163A2B]'
                 }`}
-                title="Släck alla rum"
               >
                 Släck
               </button>
@@ -1048,7 +1319,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                     ? 'bg-[#1D2F25] hover:bg-[#273F32] text-[#A6F2C6]'
                     : 'bg-[#E6EFE9] hover:bg-[#D5E6DC] text-[#163A2B]'
                 }`}
-                title="Koppla Philips Hue Bridge eller anpassa rum"
+                title="Koppla Philips Hue Bridge"
                 aria-label="Philips Hue inställningar"
               >
                 <Settings className="h-3.5 w-3.5" />
@@ -1056,7 +1327,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
             </div>
           </div>
 
-          {/* Compact 2x2 Room Grid with One-Tap Toggle & Brightness Slider */}
           <div className="my-2 grid grid-cols-2 gap-1.5">
             {hueRooms.slice(0, 4).map((room) => {
               const pct = Math.round((room.bri / 254) * 100);
@@ -1113,7 +1383,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
             })}
           </div>
 
-          {/* Bottom Row inside Hue Card: Quick App Launcher Chips (Spotify, Hue, Sonos, Home Assistant, etc.) */}
           <div className="pt-1.5 border-t border-current/10 flex items-center justify-between gap-1.5">
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
               {appShortcuts.slice(0, 4).map((app) => (
@@ -1126,7 +1395,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                       ? 'bg-[#16261E] hover:bg-[#1F352A] border-[#263E31] text-[#D7EDE0]'
                       : 'bg-[#F4F8F5] hover:bg-[#E6EFE9] border-[#D4E4DA] text-[#163A2B]'
                   }`}
-                  title={`Öppna ${app.name}`}
                 >
                   <span
                     className="h-1.5 w-1.5 rounded-full shrink-0"
@@ -1145,7 +1413,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                   ? 'bg-[#214E3B] hover:bg-[#2B614A] text-[#A6F2C6]'
                   : 'bg-[#163A2B] hover:bg-[#1E4B38] text-[#A6F2C6]'
               }`}
-              title="Hantera och öppna andra appar från skärmsläckaren"
             >
               <Grid className="h-3 w-3" />
               <span>Appar</span>
@@ -1153,182 +1420,346 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           </div>
         </div>
 
-        {/* 3. Top Right Card: MATSEDEL, KÖKSLÄGE & TIMER */}
+        {/* 3. Top Right Card (4 cols): SPOTIFY DIREKT I SKÄRMSLÄCKAREN (+ växling till Kök & Timer) */}
         <div
           className={`${
-            mobileActiveWidget === 'kitchen' || mobileActiveWidget === 'all'
+            mobileActiveWidget === 'spotify' ||
+            mobileActiveWidget === 'kitchen' ||
+            mobileActiveWidget === 'all'
               ? 'flex'
               : 'hidden md:flex'
-          } md:col-span-3 rounded-[24px] sm:rounded-[26px] border p-3.5 sm:p-4 flex-col justify-between shadow-xs ${
-            isDarkDashboard
-              ? 'bg-[#13221A] border-[#233D2F] text-[#E6F2EB]'
-              : 'm3-secondary-surface border'
-          }`}
+          } md:col-span-4 rounded-[24px] sm:rounded-[26px] border p-3.5 sm:p-4 flex-col justify-between shadow-xs ${cardSurfaceClass}`}
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded-lg bg-[#163A2B] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-[#A6F2C6]">
-                  <ChefHat className="h-3 w-3" />
-                  Kök & Recept
+          {/* Card Header with Mode Switcher: Spotify vs Kök & Timer */}
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1 rounded-xl bg-black/15 p-0.5 text-[11px] font-extrabold">
+              <button
+                type="button"
+                onClick={() => setTopRightTab('spotify')}
+                className={`rounded-lg px-2.5 py-1 flex items-center gap-1.5 transition-colors ${
+                  topRightTab === 'spotify' && mobileActiveWidget !== 'kitchen'
+                    ? 'bg-[#1ED760] text-[#08140C]'
+                    : mutedTextClass
+                }`}
+              >
+                <Music className="h-3.5 w-3.5 shrink-0" />
+                <span>Spotify</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTopRightTab('kitchen')}
+                className={`rounded-lg px-2.5 py-1 flex items-center gap-1.5 transition-colors ${
+                  topRightTab === 'kitchen' || mobileActiveWidget === 'kitchen'
+                    ? 'bg-[#163A2B] text-[#A6F2C6]'
+                    : mutedTextClass
+                }`}
+              >
+                <ChefHat className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Kök{timerSecondsLeft > 0 ? ` (${formatTimer(timerSecondsLeft)})` : ''}
                 </span>
-                {orderedRecipes.length > 1 && (
-                  <span className="text-[11px] font-mono tabular-nums font-bold opacity-80">
-                    {(selectedRecipeIdx % orderedRecipes.length) + 1}/{orderedRecipes.length}
-                  </span>
-                )}
-              </div>
-
-              {currentRecipe ? (
-                <>
-                  <h2 className="mt-1 text-sm sm:text-base font-extrabold truncate">
-                    {currentRecipe.title}
-                  </h2>
-                  <p className="text-[11px] opacity-80 truncate">
-                    {currentRecipe.prepTime} · {currentRecipe.servings} port
-                  </p>
-                </>
-              ) : (
-                <h2 className="mt-1.5 text-xs font-bold opacity-80">
-                  Inga recept sparade ännu
-                </h2>
-              )}
+              </button>
             </div>
 
-            {orderedRecipes.length > 1 && (
+            {topRightTab === 'spotify' && mobileActiveWidget !== 'kitchen' ? (
               <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
-                  onClick={() =>
-                    setSelectedRecipeIdx(
-                      (prev) =>
-                        (prev - 1 + orderedRecipes.length) % orderedRecipes.length
-                    )
-                  }
-                  className={`h-7 w-7 rounded-lg border flex items-center justify-center ${
+                  onClick={() => setSpotifyExpandModalOpen(true)}
+                  className={`rounded-lg px-2 py-1 text-[10px] font-extrabold flex items-center gap-1 transition-colors ${
                     isDarkDashboard
-                      ? 'bg-[#1B3025] border-[#2C4C3B] text-[#A6F2C6]'
-                      : 'bg-white/80 hover:bg-white border-black/10 text-[#163A2B]'
+                      ? 'bg-[#1A2E23] hover:bg-[#233E30] text-[#1ED760]'
+                      : 'bg-[#E8F8EE] hover:bg-[#D1F2DD] text-[#0F5328]'
                   }`}
-                  aria-label="Föregående recept"
+                  title="Öppna stor Spotify-spelare & låtlista"
                 >
-                  <ChevronLeft className="h-3.5 w-3.5" />
+                  <ListMusic className="h-3.5 w-3.5" />
+                  <span>Låtlista</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    setSelectedRecipeIdx((prev) => (prev + 1) % orderedRecipes.length)
-                  }
-                  className={`h-7 w-7 rounded-lg border flex items-center justify-center ${
+                  onClick={() => setSpotifySettingsOpen(true)}
+                  className={`h-7 w-7 rounded-lg flex items-center justify-center transition-colors ${
                     isDarkDashboard
-                      ? 'bg-[#1B3025] border-[#2C4C3B] text-[#A6F2C6]'
-                      : 'bg-white/80 hover:bg-white border-black/10 text-[#163A2B]'
+                      ? 'bg-[#1D2F25] hover:bg-[#273F32] text-[#A6F2C6]'
+                      : 'bg-[#E6EFE9] hover:bg-[#D5E6DC] text-[#163A2B]'
                   }`}
-                  aria-label="Nästa recept"
+                  title="Lägg till egna Spotify-spellistor eller koppla Spotify Connect"
+                  aria-label="Spotify inställningar"
                 >
-                  <ChevronRight className="h-3.5 w-3.5" />
+                  <Plus className="h-3.5 w-3.5" />
                 </button>
               </div>
+            ) : (
+              orderedRecipes.length > 1 && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedRecipeIdx(
+                        (prev) =>
+                          (prev - 1 + orderedRecipes.length) % orderedRecipes.length
+                      )
+                    }
+                    className="h-7 w-7 rounded-lg bg-[#1B3025] text-[#A6F2C6] flex items-center justify-center"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedRecipeIdx((prev) => (prev + 1) % orderedRecipes.length)
+                    }
+                    className="h-7 w-7 rounded-lg bg-[#1B3025] text-[#A6F2C6] flex items-center justify-center"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )
             )}
           </div>
 
-          {/* Interactive Kitchen Timer Bar */}
-          <div
-            className={`my-2 rounded-xl border px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1.5 ${
-              isDarkDashboard
-                ? 'bg-[#0D1812] border-[#233D2F] text-[#E6F2EB]'
-                : 'bg-white/90 border-black/10 text-[#141E18]'
-            }`}
-          >
-            <div className="flex items-center gap-1">
-              <Timer className="h-3.5 w-3.5 text-[#A6F2C6] shrink-0" />
-              <span
-                className={`text-xs font-mono tabular-nums font-extrabold px-1.5 py-0.5 rounded-md ${
-                  timerSecondsLeft > 0
-                    ? 'bg-[#163A2B] text-[#A6F2C6]'
-                    : isDarkDashboard
-                    ? 'bg-[#192D22] text-[#A6F2C6]'
-                    : 'bg-[#E6EFE9] text-[#141E18]'
-                }`}
-              >
-                {formatTimer(timerSecondsLeft)}
-              </span>
-            </div>
+          {/* ==============================================================
+              SPOTIFY CONTENT INSIDE TOP-RIGHT CARD
+             ============================================================== */}
+          {topRightTab === 'spotify' && mobileActiveWidget !== 'kitchen' ? (
+            <div className="mt-2 flex flex-col justify-between flex-1 gap-2">
+              {/* 1. Horizontal Playlist Selector Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                {spotifyPlaylists.map((pl) => {
+                  const isSelected = pl.id === selectedPlaylist?.id;
+                  return (
+                    <button
+                      key={pl.id}
+                      type="button"
+                      onClick={() => handleSelectSpotifyPlaylist(pl)}
+                      className={`rounded-xl px-2.5 py-1 text-[11px] font-extrabold flex items-center gap-1.5 whitespace-nowrap shrink-0 border transition-all ${
+                        isSelected
+                          ? 'bg-[#1ED760] border-[#1ED760] text-[#06140B] shadow-2xs'
+                          : isDarkDashboard
+                          ? 'bg-[#16241C] hover:bg-[#1E3126] border-[#253B2E] text-[#D7EDE0]'
+                          : 'bg-[#F4F8F5] hover:bg-[#E6EFE9] border-[#D4E4DA] text-[#141E18]'
+                      }`}
+                    >
+                      <Music className="h-3 w-3 shrink-0" />
+                      <span>{pl.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
-            <div className="flex items-center gap-1">
-              {[1, 5, 10].map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => addTimerMinutes(m)}
-                  className={`rounded-md px-1.5 py-0.5 text-[10px] font-mono tabular-nums font-extrabold ${
-                    isDarkDashboard
-                      ? 'bg-[#1B3025] hover:bg-[#244031] text-[#A6F2C6]'
-                      : 'bg-[#E6EFE9] hover:bg-[#D5E6DC] text-[#163A2B]'
-                  }`}
-                >
-                  +{m}m
-                </button>
-              ))}
-              {timerSecondsLeft > 0 && (
-                <>
+              {/* 2. Media Controls Bar (Prev, Play/Pause, Next, Volume, Now Playing Info) */}
+              <div
+                className={`rounded-2xl border px-3 py-2 flex items-center justify-between gap-2 ${subCardSurfaceClass}`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-extrabold truncate">
+                    {spotifyNowPlaying?.trackTitle ||
+                      selectedPlaylist?.name ||
+                      'Spotify'}
+                  </div>
+                  <div className={`text-[10px] font-medium truncate ${mutedTextClass}`}>
+                    {spotifyNowPlaying?.artistName ||
+                      spotifyTrackInfo ||
+                      selectedPlaylist?.subtitle ||
+                      'Välj spellista eller tryck Spela'}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
-                    onClick={() => setTimerRunning((r) => !r)}
-                    className="h-6 w-6 rounded-md bg-[#163A2B] text-white flex items-center justify-center"
-                    aria-label={timerRunning ? 'Pausa timer' : 'Starta timer'}
+                    onClick={handleSpotifyPrevTrack}
+                    className={`h-8 w-8 rounded-xl flex items-center justify-center transition-colors ${
+                      isDarkDashboard
+                        ? 'bg-[#1E3126] hover:bg-[#294234] text-[#E6F2EB]'
+                        : 'bg-[#E6EFE9] hover:bg-[#D5E6DC] text-[#163A2B]'
+                    }`}
+                    title="Föregående låt"
+                    aria-label="Föregående låt"
                   >
-                    {timerRunning ? (
-                      <Pause className="h-3 w-3" />
+                    <SkipBack className="h-3.5 w-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSpotifyTogglePlayPause}
+                    className="h-9 w-9 rounded-xl bg-[#1ED760] hover:bg-[#1CDF63] text-[#06140B] flex items-center justify-center shadow-xs transition-transform active:scale-95"
+                    title={isSpotifyPlaying ? 'Pausa' : 'Spela'}
+                    aria-label={isSpotifyPlaying ? 'Pausa' : 'Spela'}
+                  >
+                    {isSpotifyPlaying ? (
+                      <Pause className="h-4 w-4 fill-current" />
                     ) : (
-                      <Play className="h-3 w-3" />
+                      <Play className="h-4 w-4 fill-current ml-0.5" />
                     )}
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => {
-                      setTimerRunning(false);
-                      setTimerSecondsLeft(0);
-                    }}
-                    className="h-6 w-6 rounded-md bg-[#FDE8E8] text-[#9E2A2B] flex items-center justify-center"
-                    aria-label="Nollställ timer"
+                    onClick={handleSpotifyNextTrack}
+                    className={`h-8 w-8 rounded-xl flex items-center justify-center transition-colors ${
+                      isDarkDashboard
+                        ? 'bg-[#1E3126] hover:bg-[#294234] text-[#E6F2EB]'
+                        : 'bg-[#E6EFE9] hover:bg-[#D5E6DC] text-[#163A2B]'
+                    }`}
+                    title="Nästa låt / Nästa spellista"
+                    aria-label="Nästa låt"
                   >
-                    <RotateCcw className="h-3 w-3" />
+                    <SkipForward className="h-3.5 w-3.5" />
                   </button>
-                </>
-              )}
-            </div>
-          </div>
 
-          {/* Action Buttons: Open Step-by-Step Kitchen Mode OR Add Ingredients directly */}
-          {currentRecipe && (
-            <div className="flex items-center justify-between gap-1.5">
-              <button
-                type="button"
-                onClick={() => setKitchenModeOpen(true)}
-                className="flex-1 min-h-[34px] rounded-xl bg-[#163A2B] hover:bg-[#1E4B38] px-2.5 py-1 text-[11px] font-extrabold text-[#A6F2C6] flex items-center justify-center gap-1 transition-colors"
-              >
-                <Maximize2 className="h-3 w-3 shrink-0" />
-                <span className="truncate">Köksläge</span>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  onSendIngredientsToShopping(
-                    currentRecipe.ingredients,
-                    currentRecipe.title
+                  <button
+                    type="button"
+                    onClick={() => sendNativeAndroidMediaControl('vol_down')}
+                    className={`hidden sm:flex h-8 w-7 rounded-xl items-center justify-center transition-colors ${
+                      isDarkDashboard
+                        ? 'bg-[#1E3126] hover:bg-[#294234] text-[#96B8A4]'
+                        : 'bg-[#E6EFE9] hover:bg-[#D5E6DC] text-[#163A2B]'
+                    }`}
+                    title="Sänk volym"
+                    aria-label="Sänk volym"
+                  >
+                    <Volume1 className="h-3.5 w-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => sendNativeAndroidMediaControl('vol_up')}
+                    className={`hidden sm:flex h-8 w-7 rounded-xl items-center justify-center transition-colors ${
+                      isDarkDashboard
+                        ? 'bg-[#1E3126] hover:bg-[#294234] text-[#96B8A4]'
+                        : 'bg-[#E6EFE9] hover:bg-[#D5E6DC] text-[#163A2B]'
+                    }`}
+                    title="Höj volym"
+                    aria-label="Höj volym"
+                  >
+                    <Volume2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* 3. Live Compact Embedded Spotify Player (80px) */}
+              <div className="rounded-2xl overflow-hidden bg-[#121212] border border-[#253B2E] h-[80px]">
+                {spotifyIframeApiReady ? (
+                  <div ref={spotifyEmbedMountRef} className="w-full h-[80px]" />
+                ) : (
+                  selectedPlaylist && (
+                    <iframe
+                      key={selectedPlaylist.embedUrl}
+                      src={selectedPlaylist.embedUrl}
+                      width="100%"
+                      height="80"
+                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                      loading="lazy"
+                      title={`Spotify - ${selectedPlaylist.name}`}
+                      className="w-full h-[80px] border-0"
+                    />
                   )
-                }
-                className={`min-h-[34px] rounded-xl border px-2.5 py-1 text-[11px] font-extrabold flex items-center gap-1 shrink-0 transition-colors ${
-                  isDarkDashboard
-                    ? 'bg-[#1B3025] hover:bg-[#244031] border-[#2C4C3B] text-[#E6F2EB]'
-                    : 'bg-white hover:bg-[#F5FBF7] border-black/10 text-[#163A2B]'
-                }`}
-                title="Lägg till receptets ingredienser direkt i inköpslistan"
+                )}
+              </div>
+            </div>
+          ) : (
+            /* ==============================================================
+               KÖKSLÄGE & TIMER CONTENT INSIDE TOP-RIGHT CARD
+               ============================================================== */
+            <div className="mt-2 flex flex-col justify-between flex-1 gap-2">
+              {currentRecipe ? (
+                <div>
+                  <h2 className="text-sm sm:text-base font-extrabold truncate">
+                    {currentRecipe.title}
+                  </h2>
+                  <p className={`text-[11px] truncate ${mutedTextClass}`}>
+                    {currentRecipe.prepTime} · {currentRecipe.servings} portioner ·{' '}
+                    {currentRecipe.ingredients.length} ingredienser
+                  </p>
+                </div>
+              ) : (
+                <h2 className="text-xs font-bold opacity-80">
+                  Inga recept sparade ännu
+                </h2>
+              )}
+
+              <div
+                className={`rounded-xl border px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1.5 ${subCardSurfaceClass}`}
               >
-                <ShoppingCart className="h-3 w-3" />
-                <span>+ Inköp</span>
-              </button>
+                <div className="flex items-center gap-1">
+                  <Timer className="h-3.5 w-3.5 text-[#A6F2C6] shrink-0" />
+                  <span
+                    className={`text-xs font-mono tabular-nums font-extrabold px-1.5 py-0.5 rounded-md ${
+                      timerSecondsLeft > 0
+                        ? 'bg-[#163A2B] text-[#A6F2C6]'
+                        : 'bg-[#192D22] text-[#A6F2C6]'
+                    }`}
+                  >
+                    {formatTimer(timerSecondsLeft)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  {[1, 5, 10, 15].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => addTimerMinutes(m)}
+                      className="rounded-md bg-[#1B3025] hover:bg-[#244031] px-1.5 py-0.5 text-[10px] font-mono tabular-nums font-extrabold text-[#A6F2C6]"
+                    >
+                      +{m}m
+                    </button>
+                  ))}
+                  {timerSecondsLeft > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setTimerRunning((r) => !r)}
+                        className="h-6 w-6 rounded-md bg-[#163A2B] text-white flex items-center justify-center"
+                      >
+                        {timerRunning ? (
+                          <Pause className="h-3 w-3" />
+                        ) : (
+                          <Play className="h-3 w-3" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTimerRunning(false);
+                          setTimerSecondsLeft(0);
+                        }}
+                        className="h-6 w-6 rounded-md bg-[#FDE8E8] text-[#9E2A2B] flex items-center justify-center"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {currentRecipe && (
+                <div className="flex items-center justify-between gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setKitchenModeOpen(true)}
+                    className="flex-1 min-h-[34px] rounded-xl bg-[#163A2B] hover:bg-[#1E4B38] px-2.5 py-1 text-[11px] font-extrabold text-[#A6F2C6] flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <Maximize2 className="h-3 w-3 shrink-0" />
+                    <span className="truncate">Köksläge (Steg-för-steg)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onSendIngredientsToShopping(
+                        currentRecipe.ingredients,
+                        currentRecipe.title
+                      )
+                    }
+                    className={`min-h-[34px] rounded-xl border px-2.5 py-1 text-[11px] font-extrabold flex items-center gap-1 shrink-0 transition-colors ${subCardSurfaceClass}`}
+                  >
+                    <ShoppingCart className="h-3 w-3" />
+                    <span>+ Inköp</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1347,8 +1778,14 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
               icon: Maximize2,
             },
             {
+              id: 'spotify',
+              label: 'Spotify',
+              badge: null,
+              icon: Music,
+            },
+            {
               id: 'hue',
-              label: 'Lampor & Appar',
+              label: 'Lampor',
               badge: activeHueLightsCount,
               icon: Lightbulb,
             },
@@ -1384,7 +1821,11 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
             <button
               key={tab.id}
               type="button"
-              onClick={() => setMobileActiveWidget(tab.id)}
+              onClick={() => {
+                setMobileActiveWidget(tab.id);
+                if (tab.id === 'spotify') setTopRightTab('spotify');
+                if (tab.id === 'kitchen') setTopRightTab('kitchen');
+              }}
               className={`min-h-[36px] rounded-2xl px-2.5 py-1.5 text-[11px] font-extrabold flex items-center justify-center gap-1.5 border whitespace-nowrap shrink-0 transition-all ${
                 active
                   ? 'bg-[#163A2B] border-[#2D6B50] text-[#A6F2C6] shadow-xs'
@@ -1414,14 +1855,10 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
       </div>
 
       {/* ====================================================================
-          BOTTOM ROW:
-          - On 7"+ Tablets (md:grid-cols-3): All 3 Scrollable Widgets side-by-side
-          - Works seamlessly in both Dark Mode and Light Mode!
+          BOTTOM ROW: 3 Scrollable Household Widgets side-by-side
          ==================================================================== */}
       <div className="mt-2.5 sm:mt-3 md:flex-1 md:min-h-0 grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-3.5 md:overflow-hidden pb-2 md:pb-0">
-        {/* ================================================================
-            WIDGET 1: KOMMANDE AGENDA (KALENDER)
-           ================================================================ */}
+        {/* WIDGET 1: KOMMANDE AGENDA */}
         <section
           className={`${
             mobileActiveWidget === 'calendar' || mobileActiveWidget === 'all'
@@ -1585,9 +2022,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           </div>
         </section>
 
-        {/* ================================================================
-            WIDGET 2: INKÖPSLISTA
-           ================================================================ */}
+        {/* WIDGET 2: INKÖPSLISTA */}
         <section
           className={`${
             mobileActiveWidget === 'shopping' || mobileActiveWidget === 'all'
@@ -1716,9 +2151,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           </div>
         </section>
 
-        {/* ================================================================
-            WIDGET 3: ATT GÖRA & FÄSTA ANTECKNINGAR
-           ================================================================ */}
+        {/* WIDGET 3: ATT GÖRA & FÄSTA ANTECKNINGAR */}
         <section
           className={`${
             mobileActiveWidget === 'todo' || mobileActiveWidget === 'all'
@@ -1937,6 +2370,260 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
       </div>
 
       {/* ====================================================================
+          SPOTIFY FULL PLAYER & TRACKLIST MODAL (Right inside Screensaver!)
+         ==================================================================== */}
+      {spotifyExpandModalOpen && selectedPlaylist && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+          <div
+            className={`w-full max-w-3xl max-h-[90vh] rounded-[28px] border shadow-2xl flex flex-col overflow-hidden ${cardSurfaceClass}`}
+          >
+            <div className="bg-[#0B1F13] border-b border-[#1E3B28] text-white px-5 py-4 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="h-9 w-9 rounded-xl bg-[#1ED760] text-[#06140B] flex items-center justify-center shrink-0">
+                  <Music className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base sm:text-lg font-extrabold truncate">
+                    Spotify i Skärmsläckaren · {selectedPlaylist.name}
+                  </h2>
+                  <p className="text-[11px] text-[#1ED760]">
+                    Välj spellista eller låt nedan utan att lämna skärmsläckaren
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSpotifyExpandModalOpen(false);
+                    setSpotifySettingsOpen(true);
+                  }}
+                  className="min-h-[36px] rounded-xl bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs font-extrabold text-[#A6F2C6] flex items-center gap-1"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>+ Egen spellista</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSpotifyExpandModalOpen(false)}
+                  className="min-h-[36px] rounded-xl bg-white/15 hover:bg-white/25 px-3 py-1.5 text-xs font-extrabold text-white flex items-center gap-1"
+                >
+                  <X className="h-4 w-4" />
+                  <span>Stäng</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
+              {/* Playlist Switcher Row */}
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                {spotifyPlaylists.map((pl) => {
+                  const active = pl.id === selectedPlaylist.id;
+                  return (
+                    <button
+                      key={pl.id}
+                      type="button"
+                      onClick={() => handleSelectSpotifyPlaylist(pl)}
+                      className={`rounded-2xl px-3.5 py-2 text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 border transition-all ${
+                        active
+                          ? 'bg-[#1ED760] border-[#1ED760] text-[#06140B]'
+                          : subCardSurfaceClass
+                      }`}
+                    >
+                      <Music className="h-3.5 w-3.5" />
+                      <span>{pl.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Full Interactive Spotify Tracklist Player (380px tall) */}
+              <div className="rounded-2xl overflow-hidden border border-[#253B2E] bg-[#121212]">
+                <iframe
+                  key={`full-${selectedPlaylist.embedUrl}`}
+                  src={selectedPlaylist.embedUrl}
+                  width="100%"
+                  height="380"
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  title={`Spotify Full - ${selectedPlaylist.name}`}
+                  className="w-full h-[380px] border-0"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <span className={`text-xs ${mutedTextClass}`}>
+                  Tips: Tryck direkt på en låt i listan ovan eller styr uppspelningen från skärmsläckarens mediakontroller.
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    launchExternalAppShortcut({
+                      id: 'app-spotify-direct',
+                      name: 'Spotify',
+                      category: 'Musik',
+                      deepLink: selectedPlaylist.spotifyUri,
+                      webUrl: selectedPlaylist.deepLink,
+                      androidPackage: 'com.spotify.music',
+                      accentColor: '#1ED760',
+                    })
+                  }
+                  className="rounded-xl bg-[#1ED760] hover:bg-[#1CDF63] px-3.5 py-2 text-xs font-extrabold text-[#06140B] flex items-center gap-1.5 shrink-0"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Öppna spellistan i Spotify-appen</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+          SPOTIFY SETTINGS & ADD CUSTOM PLAYLISTS MODAL
+         ==================================================================== */}
+      {spotifySettingsOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+          <div
+            className={`w-full max-w-xl max-h-[90vh] rounded-[28px] border shadow-2xl flex flex-col overflow-hidden ${cardSurfaceClass}`}
+          >
+            <div className="bg-[#0B1F13] border-b border-[#1E3B28] text-white px-5 py-4 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="h-8 w-8 rounded-xl bg-[#1ED760] text-[#06140B] flex items-center justify-center shrink-0">
+                  <Music className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-extrabold truncate">
+                    Hantera Spotify-spellistor
+                  </h2>
+                  <p className="text-[11px] text-[#1ED760]">
+                    Lägg till familjens egna spellistor i skärmsläckaren
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSpotifySettingsOpen(false)}
+                className="min-h-[36px] rounded-xl bg-white/15 hover:bg-white/25 px-3 py-1.5 text-xs font-extrabold text-white flex items-center gap-1"
+              >
+                <X className="h-4 w-4" />
+                <span>Stäng</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              {/* Add Custom Spotify Playlist by URL */}
+              <form
+                onSubmit={handleAddCustomPlaylist}
+                className={`rounded-2xl border p-4 space-y-3 ${subCardSurfaceClass}`}
+              >
+                <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider">
+                  + Lägg till egen Spotify-spellista eller album
+                </h3>
+                <p className={`text-xs leading-relaxed ${mutedTextClass}`}>
+                  Öppna Spotify, välj <strong>Dela → Kopiera länk till spellista</strong> och klistra in länken nedan:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <input
+                    type="text"
+                    value={newPlaylistName}
+                    onChange={(e) => setNewPlaylistName(e.target.value)}
+                    placeholder="Namn (t.ex. Filips Favoriter)"
+                    className={`sm:col-span-5 rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none ${inputSurfaceClass}`}
+                  />
+                  <input
+                    type="text"
+                    value={newPlaylistUrl}
+                    onChange={(e) => setNewPlaylistUrl(e.target.value)}
+                    placeholder="https://open.spotify.com/playlist/..."
+                    className={`sm:col-span-7 rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none ${inputSurfaceClass}`}
+                  />
+                </div>
+
+                {playlistAddError && (
+                  <p className="text-xs font-bold text-[#F87171]">{playlistAddError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full rounded-xl bg-[#1ED760] hover:bg-[#1CDF63] py-2 px-4 text-xs font-extrabold text-[#06140B] transition-colors"
+                >
+                  Spara spellista till skärmsläckaren
+                </button>
+              </form>
+
+              {/* Current Saved Playlists */}
+              <div className={`rounded-2xl border p-4 space-y-2.5 ${subCardSurfaceClass}`}>
+                <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider">
+                  Dina spellistor i skärmsläckaren ({spotifyPlaylists.length})
+                </h3>
+                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                  {spotifyPlaylists.map((pl) => (
+                    <div
+                      key={pl.id}
+                      className={`rounded-xl border px-3 py-2 flex items-center justify-between gap-2 ${cardSurfaceClass}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleSelectSpotifyPlaylist(pl)}
+                        className="flex items-center gap-2 text-left min-w-0 flex-1"
+                      >
+                        <Music className="h-3.5 w-3.5 text-[#1ED760] shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-xs font-extrabold truncate">{pl.name}</div>
+                          <div className={`text-[10px] truncate ${mutedTextClass}`}>
+                            {pl.subtitle}
+                          </div>
+                        </div>
+                      </button>
+
+                      {spotifyPlaylists.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSpotifyPlaylist(pl.id)}
+                          className="h-7 w-7 rounded-lg hover:bg-red-500/15 text-[#F87171] flex items-center justify-center shrink-0"
+                          title="Ta bort spellista"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional Spotify Connect Web API Token */}
+              <div className={`rounded-2xl border p-4 space-y-2.5 ${subCardSurfaceClass}`}>
+                <h3 className="text-xs font-extrabold uppercase tracking-wider">
+                  Valfritt: Spotify Connect Fjärrstyrning (Web API Token)
+                </h3>
+                <p className={`text-[11px] leading-relaxed ${mutedTextClass}`}>
+                  Om du även vill hämta alla dina privata spellistor automatiskt och fjärrstyra andra Spotify Connect-högtalare i nätverket kan du klistra in en Spotify Web API Bearer-token här:
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    value={spotifyToken}
+                    onChange={(e) => setSpotifyToken(e.target.value)}
+                    placeholder="Spotify OAuth Bearer Token (valfritt)..."
+                    className={`flex-1 rounded-xl border px-3 py-2 text-xs font-mono focus:outline-none ${inputSurfaceClass}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleFetchPersonalPlaylistsFromToken}
+                    disabled={spotifySyncBusy}
+                    className="min-h-[36px] rounded-xl bg-[#163A2B] hover:bg-[#1E4B38] px-3 py-2 text-xs font-extrabold text-[#A6F2C6] shrink-0"
+                  >
+                    {spotifySyncBusy ? 'Hämtar...' : 'Hämta mina listor'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
           PHILIPS HUE BRIDGE & ROOMS SETUP MODAL
          ==================================================================== */}
       {hueSettingsOpen && (
@@ -1969,7 +2656,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-              {/* Step 1: Connect Local Hue Bridge */}
               <div className={`rounded-2xl border p-4 space-y-3 ${subCardSurfaceClass}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -2022,7 +2708,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                 )}
               </div>
 
-              {/* Step 2: Manage Rooms / Demo Mode */}
               <div className={`rounded-2xl border p-4 space-y-3 ${subCardSurfaceClass}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -2122,7 +2807,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
       )}
 
       {/* ====================================================================
-          ANDRA APPAR & INTEGRATIONER MODAL (App Launcher & Genägar)
+          ANDRA APPAR & INTEGRATIONER MODAL
          ==================================================================== */}
       {appsModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
@@ -2189,7 +2874,6 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                 ))}
               </div>
 
-              {/* Add Custom App / URL Shortcut */}
               <form
                 onSubmit={handleAddCustomAppShortcut}
                 className={`rounded-2xl border p-4 space-y-2.5 ${subCardSurfaceClass}`}
@@ -2235,7 +2919,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
       )}
 
       {/* ====================================================================
-          STEP-BY-STEP KITCHEN MODE MODAL (Right inside the Screensaver!)
+          STEP-BY-STEP KITCHEN MODE MODAL
          ==================================================================== */}
       {kitchenModeOpen && currentRecipe && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
