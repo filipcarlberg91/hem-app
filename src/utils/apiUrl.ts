@@ -3,13 +3,18 @@ const CLOUD_BACKEND_ORIGIN =
 
 export function getApiUrl(path: string): string {
   if (typeof window === 'undefined') return path;
-  const isNativeShell =
+  const host = window.location.hostname;
+  const isStaticOrNativeHost =
     window.location.protocol === 'capacitor:' ||
-    window.location.hostname === 'localhost' ||
+    host === 'localhost' ||
+    host === 'hemmahosf.web.app' ||
+    host === 'hemmahosf.firebaseapp.com' ||
+    host.endsWith('.github.io') ||
     Boolean((window as any).Capacitor?.isNativePlatform?.());
 
-  if (isNativeShell && path.startsWith('/api/')) {
+  if (isStaticOrNativeHost && path.startsWith('/api/')) {
     return `${CLOUD_BACKEND_ORIGIN}${path}`;
   }
   return path;
 }
+

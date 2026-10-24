@@ -1,7 +1,7 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import { getApiUrl } from './apiUrl';
 
-const recipeResponseSchema = {
+export const recipeResponseSchema = {
   type: Type.OBJECT,
   properties: {
     title: {
@@ -65,7 +65,7 @@ const recipeResponseSchema = {
   ],
 };
 
-function decodeHtmlEntities(str: string): string {
+export function decodeHtmlEntities(str: string): string {
   if (!str) return '';
   return str
     .replace(/&amp;/gi, '&')
@@ -74,13 +74,16 @@ function decodeHtmlEntities(str: string): string {
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&aring;/gi, 'å')
-    .replace(/&auml;/gi, 'ä')
-    .replace(/&ouml;/gi, 'ö')
+    .replace(/&aring;/g, 'å')
+    .replace(/&auml;/g, 'ä')
+    .replace(/&ouml;/g, 'ö')
     .replace(/&Aring;/g, 'Å')
     .replace(/&Auml;/g, 'Ä')
     .replace(/&Ouml;/g, 'Ö')
     .replace(/&eacute;/gi, 'é')
+    .replace(/&frac12;/gi, '½')
+    .replace(/&frac14;/gi, '¼')
+    .replace(/&frac34;/gi, '¾')
     .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
     .replace(/\s+/g, ' ')
@@ -100,6 +103,40 @@ export function parseIsoDurationToSwedish(iso?: string): string {
   return '';
 }
 
+function normalizeFractionsInText(input: string): string {
+  let line = input;
+  const fracMap: Record<string, number> = {
+    '½': 0.5,
+    '⅓': 0.33,
+    '⅔': 0.67,
+    '¼': 0.25,
+    '¾': 0.75,
+    '⅕': 0.2,
+  };
+  for (const [k, v] of Object.entries(fracMap)) {
+    line = line.replace(new RegExp(`(\\d+)\\s*${k}`, 'g'), (_, d) =>
+      String(Number(d) + v)
+    );
+    line = line.replace(new RegExp(k, 'g'), String(v));
+  }
+
+  // Handle "1 1/2" or "2 1/4"
+  line = line.replace(/\b(\d+)\s+(\d+)\/(\d+)\b/g, (_, whole, num, den) => {
+    const d = Number(den);
+    if (!d) return whole;
+    return String(Math.round((Number(whole) + Number(num) / d) * 100) / 100);
+  });
+
+  // Handle "1/2" or "3/4"
+  line = line.replace(/\b(\d+)\/(\d+)\b/g, (_, num, den) => {
+    const d = Number(den);
+    if (!d) return num;
+    return String(Math.round((Number(num) / d) * 100) / 100);
+  });
+
+  return line;
+}
+
 export function parseIngredientLineToStructured(rawLine: string): {
   name: string;
   amount: number;
@@ -107,34 +144,22 @@ export function parseIngredientLineToStructured(rawLine: string): {
 } {
   let line = decodeHtmlEntities(rawLine)
     .replace(/^[-•*▪▫◦]\s*/, '')
+    .replace(/^\[[ xX]?\]\s*/, '')
+    .replace(/\*\*/g, '')
     .trim();
 
-  // Replace unicode fractions
-  const fracMap: Record<string, string> = {
-    '½': '0.5',
-    '⅓': '0.33',
-    '⅔': '0.67',
-    '¼': '0.25',
-    '¾': '0.75',
-    '⅕': '0.2',
-  };
-  for (const [k, v] of Object.entries(fracMap)) {
-    line = line.replace(new RegExp(`(\\d+)\\s*${k}`, 'g'), (_, d) =>
-      String(Number(d) + Number(v))
-    );
-    line = line.replace(new RegExp(k, 'g'), v);
-  }
+  // Strip leading "ca ", "cirka ", "ev. ", "eventuellt "
+  line = line.replace(/^(?:ca|cirka|ev\.?|eventuellt)\s+/i, '');
 
-  // Handle "1 1/2 dl mjölk" or "1/2 tsk salt"
-  line = line.replace(/^(\d+)\s+(\d+)\/(\d+)\b/, (_, whole, num, den) =>
-    String(Number(whole) + Number(num) / Number(den))
-  );
-  line = line.replace(/^(\d+)\/(\d+)\b/, (_, num, den) =>
-    String(Math.round((Number(num) / Number(den)) * 100) / 100)
-  );
+  line = normalizeFractionsInText(line);
 
-  const unitRegex =
-    /^(\d+(?:[.,]\d+)?)(?:\s*-\s*\d+(?:[.,]\d+)?)?\s*(kg|hg|g|gram|l|liter|dl|cl|ml|msk|tsk|krm|st|stycken|förp|fp|pkt|paket|burk|burkar|klyfta|klyftor|knippe|kruka|påse|påsar|skiva|skivor|nypa|port|portioner)\b\.?\s*(.+)$/i;
+  const unitPattern =
+    'kg|hg|g|gram|l|liter|dl|cl|ml|msk|tsk|krm|st|stycken|förp|fp|pkt|paket|burk|burkar|klyfta|klyftor|knippe|knippen|kruka|krukor|påse|påsar|skiva|skivor|nypa|nypor|port|portioner|ask|askar|flaska|flaskor|bit|bitar';
+
+  const unitRegex = new RegExp(
+    `^(\\d+(?:[.,]\\d+)?)(?:\\s*[-–]\\s*\\d+(?:[.,]\\d+)?)?\\s*(${unitPattern})\\b\\.?\\s+(.+)$`,
+    'i'
+  );
   const match = line.match(unitRegex);
   if (match) {
     const amount = parseFloat(match[1].replace(',', '.')) || 1;
@@ -151,7 +176,7 @@ export function parseIngredientLineToStructured(rawLine: string): {
     };
   }
 
-  const numOnlyRegex = /^(\d+(?:[.,]\d+)?)\s+(.+)$/;
+  const numOnlyRegex = /^(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s+(.+)$/;
   const numMatch = line.match(numOnlyRegex);
   if (numMatch) {
     const amount = parseFloat(numMatch[1].replace(',', '.')) || 1;
@@ -170,6 +195,40 @@ export function parseIngredientLineToStructured(rawLine: string): {
   };
 }
 
+function parseTableCellsToIngredient(
+  col1Raw: string,
+  col2Raw: string
+): { name: string; amount: number; unit: string } | null {
+  const c1 = decodeHtmlEntities(col1Raw).replace(/\*\*/g, '').trim();
+  const c2 = decodeHtmlEntities(col2Raw).replace(/\*\*/g, '').trim();
+  if (!c1 && !c2) return null;
+  if (/^[-:]+$/.test(c1) || /^[-:]+$/.test(c2)) return null;
+
+  const c1Norm = normalizeFractionsInText(c1.replace(/^(?:ca|cirka)\s+/i, ''));
+  const c2Norm = normalizeFractionsInText(c2.replace(/^(?:ca|cirka)\s+/i, ''));
+
+  const startsWithNum1 = /^\d+(?:[.,]\d+)?/.test(c1Norm);
+  const startsWithNum2 = /^\d+(?:[.,]\d+)?/.test(c2Norm);
+
+  // Case A: "| Vetemjöl | 3 dl |" or "| Ägg | 3 |" (Arla.se format)
+  if (!startsWithNum1 && startsWithNum2 && c1.length >= 2) {
+    return parseIngredientLineToStructured(`${c2} ${c1}`);
+  }
+  // Case B: "| 3 dl | Vetemjöl |"
+  if (startsWithNum1 && !startsWithNum2 && c2.length >= 2) {
+    return parseIngredientLineToStructured(`${c1} ${c2}`);
+  }
+  // Case C: "| Salt & peppar | efter smak |"
+  if (!startsWithNum1 && !startsWithNum2 && c1.length >= 2) {
+    return {
+      name: c1.charAt(0).toUpperCase() + c1.slice(1),
+      amount: 1,
+      unit: 'st',
+    };
+  }
+  return null;
+}
+
 function findRecipeNodeInJsonLd(node: any): any {
   if (!node || typeof node !== 'object') return null;
   if (Array.isArray(node)) {
@@ -182,10 +241,10 @@ function findRecipeNodeInJsonLd(node: any): any {
   const typeVal = node['@type'];
   const isRecipe =
     typeVal === 'Recipe' ||
-    (Array.isArray(typeVal) && typeVal.some((t) => String(t).includes('Recipe'))) ||
-    (typeof typeVal === 'string' && typeVal.includes('Recipe'));
+    (Array.isArray(typeVal) && typeVal.some((t) => String(t).toLowerCase().includes('recipe'))) ||
+    (typeof typeVal === 'string' && typeVal.toLowerCase().includes('recipe'));
 
-  if (isRecipe && (node.name || node.recipeIngredient)) {
+  if (isRecipe && (node.name || node.recipeIngredient || node.ingredients)) {
     return node;
   }
   if (node['@graph']) {
@@ -203,7 +262,7 @@ function extractStepsFromInstructions(rawInst: any): string[] {
   if (!rawInst) return [];
   if (typeof rawInst === 'string') {
     return decodeHtmlEntities(rawInst.replace(/<[^>]+>/g, '\n'))
-      .split(/\r?\n|(?<=\.)\s+(?=[A-ZÅÄÖ])/)
+      .split(/\r?\n|(?<=[.!])\s+(?=[A-ZÅÄÖ])/)
       .map((s) => s.replace(/^\d+[.)]\s*/, '').trim())
       .filter((s) => s.length > 3);
   }
@@ -241,12 +300,53 @@ function extractImageFromRecipeNode(imgNode: any): string | undefined {
   return undefined;
 }
 
+function cleanSiteSuffixFromTitle(rawTitle: string): string {
+  return decodeHtmlEntities(rawTitle)
+    .replace(
+      /\s*[|\-–—•]\s*(Recept\s+ICA\.se|ICA\.se|ICA|Arla\.se|Arla\s+Köket|Arla|Köket\.se|Koket\.se|Köket|Coop\.se|Coop|Tasteline|Recept\.se|Allt\s+om\s+Mat|Mathem|Zeinas\s+Kitchen|Jennys\s+Matblogg|Lindas\s+Bakskola).*$/i,
+      ''
+    )
+    .replace(/\s*-\s*Recept$/i, '')
+    .trim();
+}
+
 export function parseRecipeFromHtmlOrText(htmlOrText: string, sourceUrl: string): any | null {
   if (!htmlOrText || htmlOrText.length < 30) return null;
 
-  // 1. Check all <script type="application/ld+json"> blocks for Schema.org Recipe
+  let hostname = 'webben';
+  try {
+    hostname = new URL(sourceUrl).hostname.replace(/^www\./, '');
+  } catch {
+    // ignore
+  }
+
+  const metaDescMatch =
+    htmlOrText.match(
+      /<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i
+    ) ||
+    htmlOrText.match(
+      /<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i
+    ) ||
+    htmlOrText.match(
+      /<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i
+    ) ||
+    htmlOrText.match(
+      /<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i
+    );
+  const metaDescription = metaDescMatch ? decodeHtmlEntities(metaDescMatch[1]) : '';
+
+  const ogImgMatch =
+    htmlOrText.match(
+      /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i
+    ) ||
+    htmlOrText.match(
+      /<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i
+    );
+  const metaImage = ogImgMatch ? ogImgMatch[1] : undefined;
+
+  // 1. Check all <script type="application/ld+json"> AND <script type="application/ld&#x2B;json"> (Arla.se!)
   const scriptRegex =
-    /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    /<script[^>]*type=["']application\/ld(?:\+|&#x2b;|&#43;)json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let match: RegExpExecArray | null;
   while ((match = scriptRegex.exec(htmlOrText)) !== null) {
     const rawJson = match[1].trim();
@@ -255,10 +355,11 @@ export function parseRecipeFromHtmlOrText(htmlOrText: string, sourceUrl: string)
       const parsed = JSON.parse(rawJson);
       const recipeNode = findRecipeNodeInJsonLd(parsed);
       if (recipeNode) {
-        const title = decodeHtmlEntities(recipeNode.name || 'Importerat recept');
-        const description = decodeHtmlEntities(
+        const title = cleanSiteSuffixFromTitle(recipeNode.name || 'Importerat recept');
+        const rawDesc = decodeHtmlEntities(
           (recipeNode.description || '').replace(/<[^>]+>/g, ' ')
         );
+        const description = rawDesc || metaDescription || `Importerat recept från ${hostname}.`;
         const prepTime =
           parseIsoDurationToSwedish(recipeNode.totalTime) ||
           parseIsoDurationToSwedish(recipeNode.cookTime) ||
@@ -302,19 +403,16 @@ export function parseRecipeFromHtmlOrText(htmlOrText: string, sourceUrl: string)
           .map((line: string) => parseIngredientLineToStructured(line));
 
         const steps = extractStepsFromInstructions(recipeNode.recipeInstructions);
-        const imageUrl = extractImageFromRecipeNode(recipeNode.image);
+        const imageUrl = extractImageFromRecipeNode(recipeNode.image) || metaImage;
 
-        if (title && (ingredients.length > 0 || steps.length > 0)) {
+        if (title && ingredients.length > 0) {
           return {
             title,
-            description: description || `Importerat recept från ${new URL(sourceUrl).hostname.replace(/^www\./, '')}.`,
+            description,
             prepTime,
             servings,
             tags: uniqueTags.length > 0 ? uniqueTags : ['Vardagsmat', 'Importerat'],
-            ingredients:
-              ingredients.length > 0
-                ? ingredients
-                : [{ name: 'Se receptlänk för ingredienser', amount: 1, unit: 'st' }],
+            ingredients,
             steps:
               steps.length > 0
                 ? steps
@@ -328,33 +426,227 @@ export function parseRecipeFromHtmlOrText(htmlOrText: string, sourceUrl: string)
     }
   }
 
-  // 2. Parse OpenGraph / HTML / Reader Markdown fallback
-  const titleMatch =
-    htmlOrText.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
-    htmlOrText.match(/<title[^>]*>([^<]+)<\/title>/i) ||
-    htmlOrText.match(/^Title:\s*(.+)$/m) ||
-    htmlOrText.match(/^#\s+(.+)$/m);
+  // 2. Parse Jina Reader Markdown / Structured HTML Sections
+  // Extract Markdown image before stripping image tags
+  let markdownImageUrl = metaImage;
+  if (!markdownImageUrl) {
+    const imgMatches = Array.from(
+      htmlOrText.matchAll(/!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g)
+    );
+    for (const m of imgMatches) {
+      const candidateUrl = m[1];
+      const looksLikeRealRecipePhoto =
+        /\.(?:jpe?g|png|webp|avif)(\?|$)/i.test(candidateUrl) ||
+        /assets\.icanet\.se|images\.arla\.com|img\.koket\.se|res\.cloudinary\.com/i.test(
+          candidateUrl
+        );
+      if (
+        looksLikeRealRecipePhoto &&
+        !/\.svg(\?|$)/i.test(candidateUrl) &&
+        !/16x16|32x32|avatar|logo|icon|badge|flag|square-mini|author|kockar/i.test(
+          candidateUrl
+        )
+      ) {
+        markdownImageUrl = candidateUrl;
+        break;
+      }
+    }
+  }
 
-  const descMatch =
-    htmlOrText.match(
-      /<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i
-    ) ||
-    htmlOrText.match(
-      /<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i
+  // Clean multi-line markdown links/images so table cells and list items stay on single lines,
+  // while preserving checkboxes like "- [x]" and parenthesized notes like "(stor)".
+  const normalizedMarkdown = htmlOrText
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]*)\]\((?:https?:\/\/|\/|blob:)[^)]*\)/g, (_, inner) =>
+      inner.replace(/\s+/g, ' ').trim()
     );
 
-  const ogImgMatch = htmlOrText.match(
-    /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i
+  const titleMatch =
+    normalizedMarkdown.match(/^#\s+(.+)$/m) ||
+    normalizedMarkdown.match(/^Title:\s*(.+)$/m) ||
+    htmlOrText.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+    htmlOrText.match(/<title[^>]*>([^<]+)<\/title>/i);
+
+  const cleanTitle = titleMatch ? cleanSiteSuffixFromTitle(titleMatch[1]) : '';
+
+  // Reject 404 / expired pages (like Köket.se "Gammal ost")
+  if (/^Gammal ost$/i.test(cleanTitle) || /Sidan du sökte har nått sitt bäst-före-datum/i.test(normalizedMarkdown)) {
+    return null;
+  }
+
+  // Detect prepTime & servings from text
+  const timeMatch = normalizedMarkdown.match(
+    /\b((?:Under\s+|Över\s+|Ca\s+)?(?:\d+\s*tim(?:mar)?\s*)?\d+\s*min(?:uter)?)\b/i
   );
+  const detectedPrepTime = timeMatch
+    ? timeMatch[1].replace(/^(?:Under|Över|Ca)\s+/i, '').trim()
+    : '35 min';
 
-  const cleanTitle = titleMatch
-    ? decodeHtmlEntities(titleMatch[1])
-        .replace(/\s*[|\-–—]\s*(ICA|Arla|Köket|Koket|Coop|Tasteline|Recept\.se|Allrecipes|Mathem).*$/i, '')
-        .trim()
-    : '';
+  const servingsMatch = normalizedMarkdown.match(/\b(\d+)\s*port(?:ioner)?\b/i);
+  const detectedServings = servingsMatch
+    ? Math.max(1, Math.min(24, Number(servingsMatch[1])))
+    : 4;
 
-  // Strip HTML tags to lines and look for ingredient-like lines & instruction lines
-  const textLines = htmlOrText
+  // Extract description from Markdown intro (between # Title and ## Ingredienser)
+  let detectedDescription = metaDescription;
+  if (!detectedDescription) {
+    const ingHeaderIdx = normalizedMarkdown.search(/^(?:#{1,4}\s*|\*\*)Ingredienser\b/im);
+    const introBlock =
+      ingHeaderIdx > 0
+        ? normalizedMarkdown.slice(0, ingHeaderIdx)
+        : normalizedMarkdown.slice(0, 2500);
+
+    const introLines = introBlock
+      .split(/\r?\n/)
+      .map((l) => decodeHtmlEntities(l).trim())
+      .filter((l) => {
+        if (l.length < 38 || l.length > 460) return false;
+        if (/^(?:Title:|URL Source:|Markdown Content:|#|[-*•|]|\*\*Upptäck)/i.test(l))
+          return false;
+        if (/^\[.*\]\(.*\)$/.test(l) || /^https?:\/\//i.test(l)) return false;
+        if (
+          /(?:Hoppa till|Lägg i inköpslista|Spara recept|Logga in|Betyg|kommentarer|Näringsvärde|Klimatavtryck|Köp online|Dela recept|Gå till|Öppna menyn|Köp plus)/i.test(
+            l
+          )
+        )
+          return false;
+        return /[a-zåäö]{3,}.*[.!]/i.test(l);
+      });
+
+    if (introLines.length > 0) {
+      detectedDescription = introLines[0].replace(/\*\*/g, '').trim();
+    }
+  }
+
+  // Extract structured Ingredients from "## Ingredienser" section if present
+  const sectionIngredients: { name: string; amount: number; unit: string }[] = [];
+  const ingHeadingRegex = /^(?:#{1,4}\s*|\*\*)Ingredienser(?:\*\*)?\s*$/im;
+  const ingHeadingExec = ingHeadingRegex.exec(normalizedMarkdown);
+  if (ingHeadingExec) {
+    const afterIng = normalizedMarkdown.slice(
+      ingHeadingExec.index + ingHeadingExec[0].length
+    );
+    const endIngRegex =
+      /^(?:#{1,4}\s*|\*\*)?(?:Gör så här|Så här gör du|Tillagning|Instruktioner|Steg för steg|Näringsvärde|Tips|Serveringstips|Relaterade|Kommentarer|Vad tyckte du|Andra har även|Upptäck fler|Fler goda recept|Lägg till i inköpslista|Ha med dig inköpslistan|För alla)\b/im;
+    const endIngExec = endIngRegex.exec(afterIng);
+    const ingBlock = endIngExec ? afterIng.slice(0, endIngExec.index) : afterIng.slice(0, 3500);
+
+    const rawIngLines = ingBlock.split(/\r?\n/);
+    for (const rawLine of rawIngLines) {
+      const trimmed = rawLine.trim();
+      if (!trimmed) continue;
+
+      // Skip subheaders like "### Sås" or "**Garnering**"
+      if (/^#{1,4}\s+/.test(trimmed)) continue;
+      if (/^\*\*[^*]+\*\*$/.test(trimmed)) continue;
+
+      // Skip UI noise inside Ingredients block (including "4 port", "Håll skärmen tänd", etc.)
+      if (
+        /^(?:\d+\s*port(?:ioner)?\.?$|Ändra antal|Lägg i inköpslista|Lägg till i inköpslista|Handla|Köp|Spara|Välj|Visa|Portioner|Håll skärmen tänd|Öppna matlagningsläget|Stäng$|Fler goda recept)/i.test(
+          trimmed
+        )
+      ) {
+        continue;
+      }
+
+      // Check if Markdown Table row: "| col1 | col2 |"
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        const cells = trimmed
+          .split('|')
+          .map((c) => c.trim())
+          .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+        if (cells.length >= 2) {
+          const parsedCellIng = parseTableCellsToIngredient(cells[0], cells[1]);
+          if (
+            parsedCellIng &&
+            parsedCellIng.name.length >= 2 &&
+            !/^port(?:ioner)?$/i.test(parsedCellIng.name)
+          ) {
+            sectionIngredients.push(parsedCellIng);
+          }
+        }
+        continue;
+      }
+
+      // Standard line inside ## Ingredienser (e.g. "ca 600 g kassler", "1 1/2 dl ananasjuice", "salt och peppar")
+      const cleanLine = decodeHtmlEntities(trimmed)
+        .replace(/^(?:[-*•▪▫◦]\s*)+(?:\[[ xX]?\]\s*)*/, '')
+        .replace(/\s*\[[^\]]*\]$/, '')
+        .trim();
+
+      if (
+        cleanLine.length >= 2 &&
+        cleanLine.length <= 95 &&
+        !/^(?:\d+\s*port(?:ioner)?$)/i.test(cleanLine) &&
+        !/^(?:Recept|Läs mer|Se även|Klicka|Annons|Håll skärmen|Öppna matlagnings|Stäng$)/i.test(
+          cleanLine
+        )
+      ) {
+        sectionIngredients.push(parseIngredientLineToStructured(cleanLine));
+      }
+    }
+  }
+
+  // Extract structured Steps from "## Gör så här" / "## Så här gör du" / "## Tillagning"
+  const sectionSteps: string[] = [];
+  const stepHeadingRegex =
+    /^(?:#{1,4}\s*|\*\*)(?:Gör så här|Så här gör du|Tillagning|Instruktioner|Steg för steg)(?:\*\*)?\s*$/im;
+  const stepHeadingExec = stepHeadingRegex.exec(normalizedMarkdown);
+  if (stepHeadingExec) {
+    const afterSteps = normalizedMarkdown.slice(
+      stepHeadingExec.index + stepHeadingExec[0].length
+    );
+    const endStepsRegex =
+      /^(?:#{1,4}\s*|\*\*)?(?:Skapa anteckning|Har du lagat receptet|Markera som tillagat|Markera receptet som tillagat|Jag har lagat det här receptet|Sätt betyg|Näringsvärde|Tips|Serveringstips|Dryckestips|Relaterade|Kommentarer|Vad tyckte du|Betygsätt|Andra har även|Upptäck fler|Liknande recept|Fler goda recept|Köp|Handla|Fler recept|Mer från|Få de senaste nyheterna|Om Köket)\b/im;
+    const endStepsExec = endStepsRegex.exec(afterSteps);
+    const stepsBlock = endStepsExec
+      ? afterSteps.slice(0, endStepsExec.index)
+      : afterSteps.slice(0, 4500);
+
+    const rawStepLines = stepsBlock.split(/\r?\n/);
+    for (const rawLine of rawStepLines) {
+      const cleanStep = decodeHtmlEntities(rawLine)
+        .replace(/^(?:[-*•]\s*)+(?:\[[ xX]?\]\s*)*/, '')
+        .replace(/^\[[ xX]?\]\s*/, '')
+        .replace(/^(?:Steg\s*)?\d+[.:)]\s*/i, '')
+        .replace(/\*\*/g, '')
+        .trim();
+
+      if (!cleanStep || cleanStep.length < 10 || cleanStep.length > 500) continue;
+      if (/^#{1,4}\s+/.test(cleanStep)) continue;
+      if (
+        /^(?:Starta timer|Timer|Klar!|Dela|Skriv ut|Spara|Betygsätt|Kommentera|Logga in|Håll skärmen tänd|Öppna matlagningsläget|Skapa anteckning|Betyg:|Har du lagat|Markera|Tillagat)/i.test(
+          cleanStep
+        )
+      ) {
+        continue;
+      }
+      sectionSteps.push(cleanStep);
+    }
+  }
+
+  if (cleanTitle && (sectionIngredients.length > 0 || sectionSteps.length > 0)) {
+    return {
+      title: cleanTitle,
+      description:
+        detectedDescription || `Importerat recept från ${hostname}.`,
+      prepTime: detectedPrepTime,
+      servings: detectedServings,
+      tags: ['Vardagsmat', 'Importerat'],
+      ingredients:
+        sectionIngredients.length > 0
+          ? sectionIngredients
+          : [{ name: 'Se receptlänk för ingredienser', amount: 1, unit: 'st' }],
+      steps:
+        sectionSteps.length > 0
+          ? sectionSteps
+          : ['Tillaga enligt instruktionerna på receptsidan.'],
+      imageUrl: markdownImageUrl,
+    };
+  }
+
+  // 3. Heuristic line-by-line fallback for generic HTML pages without Markdown headings
+  const textLines = normalizedMarkdown
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '\n')
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '\n')
     .replace(/<(li|p|div|br|h1|h2|h3|h4|tr)[^>]*>/gi, '\n')
@@ -364,7 +656,7 @@ export function parseRecipeFromHtmlOrText(htmlOrText: string, sourceUrl: string)
     .filter((l) => l.length >= 3 && l.length <= 220);
 
   const unitLineRegex =
-    /^(\d+(?:[.,/]\d+)?)\s*(kg|hg|g|gram|l|dl|cl|ml|msk|tsk|krm|st|förp|pkt|burk|klyftor|klyfta)\b\s+(.+)$/i;
+    /^(?:ca\s+)?(\d+(?:[.,/\s]\d+)?)\s*(kg|hg|g|gram|l|dl|cl|ml|msk|tsk|krm|st|förp|pkt|burk|klyftor|klyfta)\b\.?\s+(.+)$/i;
 
   const detectedIngredients: { name: string; amount: number; unit: string }[] = [];
   const detectedSteps: string[] = [];
@@ -373,7 +665,7 @@ export function parseRecipeFromHtmlOrText(htmlOrText: string, sourceUrl: string)
     if (unitLineRegex.test(line) && line.length < 85 && detectedIngredients.length < 30) {
       detectedIngredients.push(parseIngredientLineToStructured(line));
     } else if (
-      /^(?:\d+[.)]\s+)?(Sätt ugnen|Skala|Hacka|Skär|Blanda|Vispa|Fräs|Stek|Koka|Häll|Rör|Tillsätt|Grädda|Servera|Låt|Dela|Lägg|Smält|Pensla|Krydda)\b/i.test(
+      /^(?:\d+[.)]\s+)?(Sätt ugnen|Värm|Skala|Hacka|Skär|Blanda|Vispa|Fräs|Stek|Koka|Häll|Rör|Tillsätt|Grädda|Servera|Låt|Dela|Lägg|Smält|Pensla|Krydda|Bred|Toppa)\b/i.test(
         line
       ) &&
       line.length > 18 &&
@@ -386,11 +678,10 @@ export function parseRecipeFromHtmlOrText(htmlOrText: string, sourceUrl: string)
   if (cleanTitle && (detectedIngredients.length > 0 || detectedSteps.length > 0)) {
     return {
       title: cleanTitle,
-      description: descMatch
-        ? decodeHtmlEntities(descMatch[1])
-        : `Importerat recept från ${new URL(sourceUrl).hostname.replace(/^www\./, '')}.`,
-      prepTime: '35 min',
-      servings: 4,
+      description:
+        detectedDescription || `Importerat recept från ${hostname}.`,
+      prepTime: detectedPrepTime,
+      servings: detectedServings,
       tags: ['Vardagsmat', 'Importerat'],
       ingredients:
         detectedIngredients.length > 0
@@ -400,7 +691,7 @@ export function parseRecipeFromHtmlOrText(htmlOrText: string, sourceUrl: string)
         detectedSteps.length > 0
           ? detectedSteps
           : ['Tillaga enligt instruktionerna på receptsidan.'],
-      imageUrl: ogImgMatch ? ogImgMatch[1] : undefined,
+      imageUrl: markdownImageUrl,
     };
   }
 
@@ -452,25 +743,31 @@ function buildFallbackRecipeFromUrlSlug(url: string): any {
 }
 
 async function fetchUrlContentClientSide(targetUrl: string): Promise<string[]> {
+  // Jina Reader is placed first because it reliably bypasses Cloudflare on ICA.se, Arla.se, Köket.se, etc. in ~1s
   const candidates = [
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
     `https://r.jina.ai/${targetUrl}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
   ];
 
   const results: string[] = [];
   for (const proxyUrl of candidates) {
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 6500);
-      const res = await fetch(proxyUrl, { signal: ctrl.signal });
+      const timer = setTimeout(() => ctrl.abort(), 7000);
+      const res = await fetch(proxyUrl, {
+        headers: proxyUrl.includes('r.jina.ai')
+          ? { Accept: 'text/plain, text/markdown, */*' }
+          : undefined,
+        signal: ctrl.signal,
+      });
       clearTimeout(timer);
       if (res.ok) {
         const text = await res.text();
         if (text && text.length > 80) {
+          const testExtract = parseRecipeFromHtmlOrText(text, targetUrl);
           results.push(text);
-          // If it already contains application/ld+json or Recipe, we have full structured HTML!
-          if (text.includes('application/ld+json') || text.includes('"recipeIngredient"')) {
+          if (testExtract && testExtract.ingredients?.length > 1) {
             break;
           }
         }
@@ -510,13 +807,37 @@ export async function extractRecipeFromImage(
   };
 }
 
+function isRealExtractedRecipe(data: any): boolean {
+  if (!data || !data.title || !Array.isArray(data.ingredients) || data.ingredients.length === 0) {
+    return false;
+  }
+  const firstIngName = String(data.ingredients[0]?.name || '');
+  if (
+    firstIngName.includes('Ingredienser (justera vid behov)') ||
+    firstIngName.includes('Se ingredienser på länken') ||
+    firstIngName.includes('Se receptlänk för ingredienser')
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export async function extractRecipeFromUrl(url: string): Promise<any> {
   const cleanUrl = url.trim();
 
-  // 1. Try server endpoint first when available (parses JSON-LD + HTML on backend)
+  // 1. Try direct client-side extraction via Jina Reader / CORS proxies first
+  const fetchedTexts = await fetchUrlContentClientSide(cleanUrl);
+  for (const rawContent of fetchedTexts) {
+    const extracted = parseRecipeFromHtmlOrText(rawContent, cleanUrl);
+    if (isRealExtractedRecipe(extracted)) {
+      return extracted;
+    }
+  }
+
+  // 2. Try server endpoint (parses JSON-LD + Jina Reader + HTML on backend)
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const timer = setTimeout(() => ctrl.abort(), 8500);
     const res = await fetch(getApiUrl('/api/recipes/extract-url'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -526,23 +847,14 @@ export async function extractRecipeFromUrl(url: string): Promise<any> {
     clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
-      if (data && data.title) {
+      if (isRealExtractedRecipe(data)) {
         return data;
       }
     }
   } catch {
-    // Continue to direct client-side HTML / JSON-LD extraction
+    // Fallback below
   }
 
-  // 2. Fetch webpage HTML/Reader via CORS proxies and extract Schema.org Recipe JSON-LD / HTML directly on device
-  const fetchedTexts = await fetchUrlContentClientSide(cleanUrl);
-  for (const rawContent of fetchedTexts) {
-    const extracted = parseRecipeFromHtmlOrText(rawContent, cleanUrl);
-    if (extracted) {
-      return extracted;
-    }
-  }
-
-  // 3. Guaranteed clean fallback from URL slug (never throws 402/RESOURCE_EXHAUSTED!)
+  // 3. Guaranteed clean fallback from URL slug
   return buildFallbackRecipeFromUrlSlug(cleanUrl);
 }

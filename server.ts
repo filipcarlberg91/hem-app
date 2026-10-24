@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
+import { parseRecipeFromHtmlOrText } from './src/utils/recipeExtractorClient';
 
 dotenv.config();
 
@@ -509,59 +510,15 @@ async function startServer() {
         return;
       }
 
-      const decodeEntities = (str: string) =>
-        String(str || '')
-          .replace(/&amp;/gi, '&')
-          .replace(/&quot;/gi, '"')
-          .replace(/&#39;|&apos;/gi, "'")
-          .replace(/&lt;/gi, '<')
-          .replace(/&gt;/gi, '>')
-          .replace(/&nbsp;/gi, ' ')
-          .replace(/&frac12;/gi, '0.5')
-          .replace(/&frac14;/gi, '0.25')
-          .replace(/&frac34;/gi, '0.75')
-          .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
-          .replace(/\s+/g, ' ')
-          .trim();
-
-      const stripHtml = (s: string) =>
-        decodeEntities(String(s || '').replace(/<[^>]+>/g, ' '));
-
-      const parseIngLine = (raw: string) => {
-        const line = stripHtml(raw)
-          .replace(/^[•\-*▪▫◦]\s*/, '')
-          .replace(/¼/g, '0.25')
-          .replace(/½/g, '0.5')
-          .replace(/¾/g, '0.75')
-          .trim();
-        if (!line) return null;
-        const m = line.match(
-          /^(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+)?)\s*(st|g|kg|hg|ml|cl|dl|l|msk|tsk|krm|förp|pkt|burk|burkar|påse|påsar|klyfta|klyftor|skiva|skivor|knippe|kruka|nypa)?\b\.?\s+(.+)$/i
-        );
-        if (m) {
-          let amt = 1;
-          const rawNum = m[1].replace(',', '.').trim();
-          if (rawNum.includes('/')) {
-            const [n, d] = rawNum.split('/').map((x) => parseFloat(x.trim()));
-            if (!isNaN(n) && !isNaN(d) && d !== 0) amt = Math.round((n / d) * 100) / 100;
-          } else {
-            amt = parseFloat(rawNum) || 1;
-          }
-          return {
-            amount: amt,
-            unit: (m[2] || 'st').toLowerCase(),
-            name: m[3].trim(),
-          };
-        }
-        return { name: line, amount: 1, unit: 'st' };
-      };
-
+      const cleanUrl = url.trim();
       let rawHtml = '';
       let pageText = '';
+
+      // 1. Try direct fetch first (works for Arla.se, Köket.se, Coop.se, etc.)
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 7500);
-        const pageRes = await fetch(url, {
+        const timeout = setTimeout(() => controller.abort(), 6500);
+        const pageRes = await fetch(cleanUrl, {
           headers: {
             'User-Agent':
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -573,6 +530,11 @@ async function startServer() {
         clearTimeout(timeout);
         if (pageRes.ok) {
           rawHtml = await pageRes.text();
+          const parsedDirect = parseRecipeFromHtmlOrText(rawHtml, cleanUrl);
+          if (parsedDirect && parsedDirect.ingredients?.length > 0) {
+            res.json(parsedDirect);
+            return;
+          }
           pageText = rawHtml
             .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
             .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
@@ -584,101 +546,38 @@ async function startServer() {
         // Ignore direct fetch failure
       }
 
-      // 1. Try Schema.org JSON-LD Recipe extraction first (works directly without AI credits)
-      if (rawHtml) {
-        const ldRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-        let match: RegExpExecArray | null;
-        const findRecipeNode = (node: any): any => {
-          if (!node || typeof node !== 'object') return null;
-          if (Array.isArray(node)) {
-            for (const item of node) {
-              const found = findRecipeNode(item);
-              if (found) return found;
-            }
-            return null;
+      // 2. Try Jina Reader (bypasses Cloudflare on ICA.se, etc. and returns structured Markdown)
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 7500);
+        const jinaRes = await fetch(`https://r.jina.ai/${cleanUrl}`, {
+          headers: {
+            Accept: 'text/plain, text/markdown, */*',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (jinaRes.ok) {
+          const jinaMarkdown = await jinaRes.text();
+          const parsedJina = parseRecipeFromHtmlOrText(jinaMarkdown, cleanUrl);
+          if (parsedJina && parsedJina.ingredients?.length > 0) {
+            res.json(parsedJina);
+            return;
           }
-          const t = node['@type'];
-          const isRecipe =
-            (typeof t === 'string' && t.toLowerCase().includes('recipe')) ||
-            (Array.isArray(t) && t.some((x) => String(x).toLowerCase().includes('recipe')));
-          if (isRecipe) return node;
-          if (Array.isArray(node['@graph'])) return findRecipeNode(node['@graph']);
-          return null;
-        };
-
-        while ((match = ldRegex.exec(rawHtml)) !== null) {
-          try {
-            const parsedJson = JSON.parse(match[1].trim());
-            const rec = findRecipeNode(parsedJson);
-            if (rec && rec.name) {
-              const rawIngs = Array.isArray(rec.recipeIngredient)
-                ? rec.recipeIngredient
-                : Array.isArray(rec.ingredients)
-                ? rec.ingredients
-                : [];
-              const ingredients = rawIngs
-                .map((x: any) => (typeof x === 'string' ? parseIngLine(x) : null))
-                .filter(Boolean);
-
-              const extractSteps = (inst: any): string[] => {
-                if (!inst) return [];
-                if (typeof inst === 'string') {
-                  return stripHtml(inst)
-                    .split(/(?:\r?\n)+|(?<=[.!])\s+(?=[A-ZÅÄÖ])/)
-                    .map((s) => s.trim())
-                    .filter((s) => s.length > 3);
-                }
-                if (Array.isArray(inst)) return inst.flatMap((x) => extractSteps(x));
-                if (typeof inst === 'object') {
-                  if (typeof inst.text === 'string') return [stripHtml(inst.text)];
-                  if (Array.isArray(inst.itemListElement))
-                    return extractSteps(inst.itemListElement);
-                }
-                return [];
-              };
-
-              const steps = extractSteps(rec.recipeInstructions);
-              let imageUrl: string | undefined;
-              if (typeof rec.image === 'string') imageUrl = rec.image;
-              else if (Array.isArray(rec.image) && rec.image.length > 0) {
-                imageUrl =
-                  typeof rec.image[0] === 'string' ? rec.image[0] : rec.image[0]?.url;
-              } else if (rec.image && typeof rec.image.url === 'string') {
-                imageUrl = rec.image.url;
-              }
-
-              if (ingredients.length > 0 || steps.length > 0) {
-                res.json({
-                  title: stripHtml(rec.name),
-                  description: stripHtml(rec.description || 'Importerat recept från webben.'),
-                  prepTime: '30 min',
-                  servings: 4,
-                  tags: ['Vardagsmat'],
-                  ingredients:
-                    ingredients.length > 0
-                      ? ingredients
-                      : [{ name: 'Se ingredienser på länken', amount: 1, unit: 'st' }],
-                  steps:
-                    steps.length > 0
-                      ? steps
-                      : ['Tillaga enligt instruktionerna på receptlänken.'],
-                  imageUrl,
-                });
-                return;
-              }
-            }
-          } catch {
-            // Continue checking other script blocks
+          if (!pageText && jinaMarkdown) {
+            pageText = jinaMarkdown.slice(0, 20000);
           }
         }
+      } catch {
+        // Ignore Jina Reader failure
       }
 
-      // 2. Optional AI extraction if configured and has credits
+      // 3. Optional AI extraction if configured and has credits
       try {
         const ai = getAiClient();
         const prompt = pageText
-          ? `Extrahera receptet från följande webbsida (${url}) och översätt/formattera allt till svenska:\n\n${pageText}`
-          : `Extrahera eller rekonstruera receptet från denna webbadress (${url}) på svenska med korrekta ingredienser, mått och tillagningssteg.`;
+          ? `Extrahera receptet från följande webbsida (${cleanUrl}) och översätt/formattera allt till svenska:\n\n${pageText}`
+          : `Extrahera eller rekonstruera receptet från denna webbadress (${cleanUrl}) på svenska med korrekta ingredienser, mått och tillagningssteg.`;
 
         const response = await ai.models.generateContent({
           model: 'gemini-3-flash-preview',
@@ -696,25 +595,11 @@ async function startServer() {
           return;
         }
       } catch {
-        // Fall through to URL slug / HTML title fallback
+        // Fall through
       }
 
-      // 3. Resilient fallback from HTML title or URL slug
-      const titleMatch = rawHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      const fallbackTitle = titleMatch
-        ? stripHtml(titleMatch[1]).replace(/\s*[|\-–—•].*$/, '').trim()
-        : decodeURIComponent(new URL(url).pathname.split('/').filter(Boolean).pop() || 'Recept')
-            .replace(/[-_]+/g, ' ')
-            .trim();
-
-      res.json({
-        title: fallbackTitle || 'Importerat recept',
-        description: `Importerat från ${new URL(url).hostname.replace(/^www\./, '')}`,
-        prepTime: '30 min',
-        servings: 4,
-        tags: ['Vardagsmat'],
-        ingredients: [{ name: 'Ingredienser (justera vid behov)', amount: 4, unit: 'port' }],
-        steps: [`Följ tillagningsstegen på ${url}`],
+      res.status(422).json({
+        error: 'Kunde inte tolka receptstrukturen på servern, använder klientextraktor.',
       });
     } catch (error: any) {
       console.error('Error extracting recipe from URL:', error);

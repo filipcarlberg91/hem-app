@@ -43,10 +43,22 @@ const featureGraphicSvg = `<?xml version="1.0" encoding="UTF-8"?>
 
   <!-- Left Column: App Icon, Title & Value Proposition -->
   <g transform="translate(56, 62)">
-    <!-- App Icon Badge -->
-    <rect x="0" y="0" width="76" height="76" rx="20" fill="#F6FBF7" />
-    <rect x="6" y="6" width="64" height="64" rx="16" fill="#183D2C" />
-    <path d="M38 18 L16 36 H23 V54 H33 V42 H43 V54 H53 V36 H60 Z" fill="#A6F2C6" />
+    <!-- App Icon Badge (Expressive Bento-Hem) -->
+    <g transform="scale(0.1484375)">
+      <rect width="512" height="512" rx="116" fill="#143325" stroke="#A6F2C6" stroke-width="10" />
+      <path d="M232 96 C246 84 266 84 280 96 L402 202 C418 216 408 242 386 242 H126 C104 242 94 216 110 202 L232 96 Z" fill="#A6F2C6" />
+      <circle cx="256" cy="178" r="22" fill="#183D2C" />
+      <rect x="116" y="262" width="130" height="146" rx="40" fill="#93C5FD" />
+      <rect x="148" y="298" width="66" height="16" rx="8" fill="#1E3A8A" />
+      <circle cx="162" cy="344" r="10" fill="#1E3A8A" />
+      <circle cx="198" cy="344" r="10" fill="#1E3A8A" />
+      <circle cx="162" cy="374" r="10" fill="#1E3A8A" />
+      <rect x="266" y="262" width="130" height="66" rx="33" fill="#FDBA74" />
+      <circle cx="304" cy="295" r="11" fill="#7C2D12" />
+      <rect x="326" y="287" width="44" height="16" rx="8" fill="#7C2D12" />
+      <rect x="266" y="342" width="130" height="66" rx="33" fill="#F6FBF7" />
+      <path d="M312 375 L326 389 L354 361" fill="none" stroke="#183D2C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
 
     <text x="94" y="36" font-family="Liberation Sans" font-weight="bold" font-size="16" fill="#A6F2C6" letter-spacing="1.5">FAMILJENS VARDAGSNAV</text>
     <text x="94" y="68" font-family="Liberation Sans" font-weight="bold" font-size="38" fill="#FFFFFF">Hem</text>

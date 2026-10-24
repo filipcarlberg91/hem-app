@@ -1,76 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1E4B35" />
-      <stop offset="100%" stop-color="#112C1F" />
-    </linearGradient>
-    <linearGradient id="roofGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#A6F2C6" />
-      <stop offset="100%" stop-color="#76DBA3" />
+    <linearGradient id="bg5" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1A4230" />
+      <stop offset="100%" stop-color="#0D2319" />
     </linearGradient>
   </defs>
 
-  <!-- Material 3 Expressive Background -->
-  <rect width="512" height="512" rx="120" fill="url(#bgGrad)" />
+  <rect width="512" height="512" rx="116" fill="url(#bg5)" />
 
-  <!-- Subtle Nordic Halo Circle -->
-  <circle cx="256" cy="258" r="142" fill="#255940" opacity="0.45" />
+  <!-- Top Roof Triangle / Pill (Mint Green - Hemmet) -->
+  <path d="M232 96 C246 84 266 84 280 96 L402 202 C418 216 408 242 386 242 H126 C104 242 94 216 110 202 L232 96 Z" fill="#A6F2C6" />
+  <circle cx="256" cy="178" r="22" fill="#183D2C" />
 
-  <!-- Scaled & Centered House Artwork (72% scale for Web/In-App header) -->
-  <g transform="translate(256, 260) scale(0.72) translate(-256, -268)">
-    <!-- Chimney -->
-    <rect x="332" y="114" width="36" height="68" rx="12" fill="#FCE8D5" />
+  <!-- Bottom Left Bento Tile (Sky Blue - Kalender) -->
+  <rect x="116" y="262" width="130" height="146" rx="40" fill="#93C5FD" />
+  <rect x="148" y="298" width="66" height="16" rx="8" fill="#1E3A8A" />
+  <circle cx="162" cy="344" r="10" fill="#1E3A8A" />
+  <circle cx="198" cy="344" r="10" fill="#1E3A8A" />
+  <circle cx="162" cy="374" r="10" fill="#1E3A8A" />
 
-    <!-- House Body -->
-    <path
-      d="M124 236 L256 126 L388 236 V384 C388 401.673 373.673 416 356 416 H156 C138.327 416 124 401.673 124 384 Z"
-      fill="#F6FBF7"
-    />
+  <!-- Bottom Right Top Bento Pill (Warm Amber/Coral - Inköp & Mat) -->
+  <rect x="266" y="262" width="130" height="66" rx="33" fill="#FDBA74" />
+  <circle cx="304" cy="295" r="11" fill="#7C2D12" />
+  <rect x="326" y="287" width="44" height="16" rx="8" fill="#7C2D12" />
 
-    <!-- Expressive Pitched Roof Overhang -->
-    <path
-      d="M92 246 L239.5 118.5 C249.0 110.3 263.0 110.3 272.5 118.5 L420 246"
-      fill="none"
-      stroke="url(#roofGrad)"
-      stroke-width="36"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-
-    <!-- Top-Left: Calendar Tile -->
-    <rect x="166" y="226" width="78" height="72" rx="20" fill="#FCE8D5" />
-    <rect x="182" y="242" width="46" height="12" rx="6" fill="#C86D3B" />
-    <circle cx="192" cy="272" r="7" fill="#C86D3B" />
-    <circle cx="216" cy="272" r="7" fill="#C86D3B" />
-
-    <!-- Top-Right: Todo Checkmark Tile -->
-    <rect x="268" y="226" width="78" height="72" rx="20" fill="#D8F3E3" />
-    <path
-      d="M290 262 L303 275 L326 249"
-      fill="none"
-      stroke="#183D2C"
-      stroke-width="10"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-
-    <!-- Bottom-Left: Recipes & Shopping Tile -->
-    <rect x="166" y="316" width="78" height="72" rx="20" fill="#EAE2FA" />
-    <path
-      d="M190 346 H220 L215 370 H195 Z"
-      fill="#5C4389"
-    />
-    <path
-      d="M196 346 C196 336 214 336 214 346"
-      fill="none"
-      stroke="#5C4389"
-      stroke-width="6"
-      stroke-linecap="round"
-    />
-
-    <!-- Bottom-Right: Notes & Budget Tile -->
-    <rect x="268" y="316" width="78" height="72" rx="20" fill="#D6EEF8" />
-    <rect x="286" y="338" width="42" height="8" rx="4" fill="#1D5B79" />
-    <rect x="286" y="354" width="28" height="8" rx="4" fill="#1D5B79" />
-  </g>
+  <!-- Bottom Right Lower Bento Pill (Cream White - Att göra Bock) -->
+  <rect x="266" y="342" width="130" height="66" rx="33" fill="#F6FBF7" />
+  <path d="M312 375 L326 389 L354 361" fill="none" stroke="#183D2C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
 </svg>
