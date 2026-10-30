@@ -782,16 +782,16 @@ async function startServer() {
       const extractedPhotos: Array<{ id: string; imageUrl: string; caption: string }> = [];
 
       for (const base of matches) {
-        // Skip tiny avatar/icon URLs or duplicates
+        if (base.includes('/a/') || base.includes('/a-/')) continue;
         if (seenBaseUrls.has(base)) continue;
         seenBaseUrls.add(base);
         const idx = extractedPhotos.length + 1;
         extractedPhotos.push({
           id: `gphotos-${idx}-${base.slice(-12)}`,
-          imageUrl: `${base}=w1920-h1080`,
+          imageUrl: `${base}=w3840-h2160`,
           caption: `${albumTitle} · Google Foto`,
         });
-        if (extractedPhotos.length >= 120) break;
+        if (extractedPhotos.length >= 200) break;
       }
 
       if (extractedPhotos.length === 0) {

@@ -203,33 +203,50 @@ export async function compressGalleryPhoto(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
+      const originalDataUrl = String(reader.result || '');
+      if (!originalDataUrl) {
+        reject(new Error('Kunde inte läsa bilden.'));
+        return;
+      }
+      // Verify the browser can render the original data URL natively; if so, preserve 100% original size & quality
       const img = new Image();
       img.onload = () => {
-        const maxDim = 800;
-        let width = img.width;
-        let height = img.height;
-        if (width > maxDim || height > maxDim) {
-          if (width >= height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
+        const mime = (file.type || '').toLowerCase();
+        if (
+          mime === 'image/jpeg' ||
+          mime === 'image/jpg' ||
+          mime === 'image/png' ||
+          mime === 'image/webp' ||
+          mime === 'image/gif' ||
+          mime === 'image/avif' ||
+          originalDataUrl.startsWith('data:image/')
+        ) {
+          resolve(originalDataUrl);
+          return;
         }
+        // Fallback for non-standard containers: draw at full original dimensions (no downscaling)
+        const width = img.naturalWidth || img.width;
+        const height = img.naturalHeight || img.height;
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve(String(reader.result));
+          resolve(originalDataUrl);
           return;
         }
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.68));
+        resolve(canvas.toDataURL('image/jpeg', 0.98));
       };
-      img.onerror = () => reject(new Error('Kunde inte läsa bilden.'));
-      img.src = String(reader.result);
+      img.onerror = () => {
+        // Return original data URL if valid
+        if (originalDataUrl.startsWith('data:')) {
+          resolve(originalDataUrl);
+        } else {
+          reject(new Error('Kunde inte läsa bilden.'));
+        }
+      };
+      img.src = originalDataUrl;
     };
     reader.onerror = () => reject(new Error('Kunde inte ladda upp bilden.'));
     reader.readAsDataURL(file);
@@ -456,6 +473,239 @@ function parseSliceDoc(
 
 const photoBlobCache = new Map<string, string>();
 const savedPhotoBlobIds = new Set<string>();
+const PHOTO_CHUNK_MAX_CHARS = 740000;
+const PHOTO_IDB_NAME = 'hem_original_photos_db_v1';
+const PHOTO_IDB_STORE = 'photo_blobs';
+
+function openPhotoIdb(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !window.indexedDB) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.open(PHOTO_IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const dbInst = req.result;
+        if (!dbInst.objectStoreNames.contains(PHOTO_IDB_STORE)) {
+          dbInst.createObjectStore(PHOTO_IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function savePhotoBlobToIdb(photoId: string, dataUrl: string): Promise<void> {
+  if (!photoId || !dataUrl || !dataUrl.startsWith('data:')) return;
+  photoBlobCache.set(photoId, dataUrl);
+  const idb = await openPhotoIdb();
+  if (!idb) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = idb.transaction(PHOTO_IDB_STORE, 'readwrite');
+      tx.objectStore(PHOTO_IDB_STORE).put(dataUrl, photoId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+export async function getPhotoBlobFromIdb(photoId: string): Promise<string | null> {
+  if (!photoId) return null;
+  const inMem = photoBlobCache.get(photoId);
+  if (inMem) return inMem;
+  const idb = await openPhotoIdb();
+  if (!idb) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = idb.transaction(PHOTO_IDB_STORE, 'readonly');
+      const req = tx.objectStore(PHOTO_IDB_STORE).get(photoId);
+      req.onsuccess = () => {
+        const val = typeof req.result === 'string' ? req.result : null;
+        if (val) {
+          photoBlobCache.set(photoId, val);
+        }
+        resolve(val);
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function hydratePhotosFromLocalCache(
+  photos: PhotoItem[]
+): Promise<PhotoItem[]> {
+  if (!Array.isArray(photos) || photos.length === 0) return photos;
+  let changed = false;
+  const hydrated = await Promise.all(
+    photos.map(async (p) => {
+      if (!p || !p.id) return p;
+      if (p.imageUrl && p.imageUrl.startsWith('data:')) {
+        savePhotoBlobToIdb(p.id, p.imageUrl).catch(() => {});
+        return p;
+      }
+      if (
+        p.imageUrl === '__idb_blob__' ||
+        p.imageUrl === '__cloud_blob__' ||
+        !p.imageUrl
+      ) {
+        const cached = await getPhotoBlobFromIdb(p.id);
+        if (cached) {
+          changed = true;
+          return { ...p, imageUrl: cached };
+        }
+      }
+      return p;
+    })
+  );
+  return changed ? hydrated : photos;
+}
+
+export function savePhotosSafelyToLocalStorage(
+  storageKey: string,
+  photos: PhotoItem[]
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    for (const p of photos) {
+      if (p?.id && p.imageUrl && p.imageUrl.startsWith('data:')) {
+        savePhotoBlobToIdb(p.id, p.imageUrl).catch(() => {});
+      }
+    }
+    const compactPhotos = photos.map((p) => {
+      if (p?.imageUrl && p.imageUrl.startsWith('data:') && p.imageUrl.length > 180000) {
+        return { ...p, imageUrl: '__idb_blob__' };
+      }
+      return p;
+    });
+    localStorage.setItem(storageKey, JSON.stringify(compactPhotos));
+  } catch {
+    try {
+      const ultraCompact = photos.map((p) =>
+        p?.imageUrl?.startsWith('data:') ? { ...p, imageUrl: '__idb_blob__' } : p
+      );
+      localStorage.setItem(storageKey, JSON.stringify(ultraCompact));
+    } catch {
+      // Ignore quota exceeded
+    }
+  }
+}
+
+async function readCloudPhotoBlob(photoId: string): Promise<string | null> {
+  const cached = await getPhotoBlobFromIdb(photoId);
+  if (cached) return cached;
+
+  try {
+    const blobDocId = sanitizeFirestoreId(`photo_blob_${photoId}`);
+    const blobSnap = await getDoc(doc(db, 'workspaces', blobDocId));
+    if (!blobSnap.exists()) return null;
+    const data = blobSnap.data() || {};
+    const chunkCount = Number(data.chunkCount || 1);
+
+    if (chunkCount > 1 || data.imageUrl === '__chunked__') {
+      const chunkPromises: Promise<string>[] = [];
+      for (let idx = 0; idx < chunkCount; idx++) {
+        const chunkDocId = sanitizeFirestoreId(`photo_blob_${photoId}_c_${idx}`);
+        chunkPromises.push(
+          getDoc(doc(db, 'workspaces', chunkDocId)).then((snap) =>
+            snap.exists() ? String(snap.data()?.data || '') : ''
+          )
+        );
+      }
+      const chunkParts = await Promise.all(chunkPromises);
+      if (chunkParts.every((part) => part.length > 0)) {
+        const fullDataUrl = chunkParts.join('');
+        await savePhotoBlobToIdb(photoId, fullDataUrl);
+        savedPhotoBlobIds.add(photoId);
+        return fullDataUrl;
+      }
+      return null;
+    }
+
+    const imgData = data.imageUrl;
+    if (typeof imgData === 'string' && imgData.length > 0 && imgData !== '__chunked__') {
+      await savePhotoBlobToIdb(photoId, imgData);
+      savedPhotoBlobIds.add(photoId);
+      return imgData;
+    }
+  } catch {
+    // Ignore transient blob fetch error
+  }
+  return null;
+}
+
+async function writeCloudPhotoBlob(
+  ownerUid: string,
+  photoId: string,
+  dataUrl: string
+): Promise<void> {
+  await savePhotoBlobToIdb(photoId, dataUrl);
+  if (savedPhotoBlobIds.has(photoId)) return;
+
+  try {
+    const blobDocId = sanitizeFirestoreId(`photo_blob_${photoId}`);
+    if (dataUrl.length <= PHOTO_CHUNK_MAX_CHARS) {
+      await setDoc(
+        doc(db, 'workspaces', blobDocId),
+        {
+          ownerId: ownerUid,
+          photoId,
+          chunkCount: 1,
+          imageUrl: dataUrl,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      savedPhotoBlobIds.add(photoId);
+      return;
+    }
+
+    // Split original-resolution image into <= 740 KB Firestore chunks so multi-megabyte photos sync cleanly
+    const chunks: string[] = [];
+    for (let offset = 0; offset < dataUrl.length; offset += PHOTO_CHUNK_MAX_CHARS) {
+      chunks.push(dataUrl.slice(offset, offset + PHOTO_CHUNK_MAX_CHARS));
+    }
+
+    await Promise.all([
+      setDoc(
+        doc(db, 'workspaces', blobDocId),
+        {
+          ownerId: ownerUid,
+          photoId,
+          chunkCount: chunks.length,
+          totalLength: dataUrl.length,
+          imageUrl: '__chunked__',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      ),
+      ...chunks.map((chunkStr, idx) => {
+        const chunkDocId = sanitizeFirestoreId(`photo_blob_${photoId}_c_${idx}`);
+        return setDoc(
+          doc(db, 'workspaces', chunkDocId),
+          {
+            ownerId: ownerUid,
+            photoId,
+            chunkIndex: idx,
+            data: chunkStr,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }),
+    ]);
+    savedPhotoBlobIds.add(photoId);
+  } catch {
+    // Ignore individual blob error
+  }
+}
 
 async function readFirestoreWorkspaceSlice(
   wsKey: string,
@@ -473,29 +723,18 @@ async function readFirestoreWorkspaceSlice(
         parsed.photos.map(async (p) => {
           if (!p || !p.id) return;
           if (p.imageUrl && p.imageUrl.startsWith('data:')) {
-            photoBlobCache.set(p.id, p.imageUrl);
+            await savePhotoBlobToIdb(p.id, p.imageUrl);
             savedPhotoBlobIds.add(p.id);
             return;
           }
-          if (p.imageUrl === '__cloud_blob__' || !p.imageUrl) {
-            const cachedUrl = photoBlobCache.get(p.id);
-            if (cachedUrl) {
-              p.imageUrl = cachedUrl;
-              return;
-            }
-            try {
-              const blobDocId = sanitizeFirestoreId(`photo_blob_${p.id}`);
-              const blobSnap = await getDoc(doc(db, 'workspaces', blobDocId));
-              if (blobSnap.exists()) {
-                const imgData = blobSnap.data()?.imageUrl;
-                if (typeof imgData === 'string' && imgData.length > 0) {
-                  p.imageUrl = imgData;
-                  photoBlobCache.set(p.id, imgData);
-                  savedPhotoBlobIds.add(p.id);
-                }
-              }
-            } catch {
-              // Ignore transient blob fetch error
+          if (
+            p.imageUrl === '__cloud_blob__' ||
+            p.imageUrl === '__idb_blob__' ||
+            !p.imageUrl
+          ) {
+            const loadedBlob = await readCloudPhotoBlob(p.id);
+            if (loadedBlob) {
+              p.imageUrl = loadedBlob;
             }
           }
         })
@@ -535,39 +774,37 @@ async function writeFirestoreWorkspaceSlice(
     new Set([myEmail, ...memberEmails.map((e) => e.trim().toLowerCase()).filter(Boolean)])
   ).slice(0, 10);
 
-  // Persist individual photo blobs for any newly added photos so large galleries never hit Firestore's 1MB doc limit
+  // Persist individual (or chunked) photo blobs for any newly added photos so original-resolution photos never hit Firestore's 1MB doc limit
   if (Array.isArray(slice.photos) && slice.photos.length > 0) {
     await Promise.all(
       slice.photos.map(async (p) => {
-        if (!p || !p.id || !p.imageUrl || !p.imageUrl.startsWith('data:')) return;
-        photoBlobCache.set(p.id, p.imageUrl);
-        if (savedPhotoBlobIds.has(p.id)) return;
-        try {
-          const blobDocId = sanitizeFirestoreId(`photo_blob_${p.id}`);
-          await setDoc(
-            doc(db, 'workspaces', blobDocId),
-            {
-              ownerId: user.uid,
-              photoId: p.id,
-              imageUrl: p.imageUrl,
-              updatedAt: serverTimestamp(),
-            },
-            { merge: true }
-          );
-          savedPhotoBlobIds.add(p.id);
-        } catch {
-          // Ignore individual blob error; inline sliceJson will still hold what fits
+        if (!p || !p.id) return;
+        let dataUrl = p.imageUrl;
+        if (
+          (!dataUrl || dataUrl === '__idb_blob__' || dataUrl === '__cloud_blob__') &&
+          photoBlobCache.has(p.id)
+        ) {
+          dataUrl = photoBlobCache.get(p.id)!;
         }
+        if (!dataUrl || !dataUrl.startsWith('data:')) return;
+        await writeCloudPhotoBlob(user.uid, p.id, dataUrl);
       })
     );
   }
 
-  // Strip heavy redundant avatar base64 data from photo items if needed and offload older photo blobs if sliceJson > 720 KB
+  // Strip heavy redundant avatar base64 data from photo items and offload original-size photo blobs (> 140 KB) to photo_blob docs
   const sliceForDoc: WorkspaceDataSlice = {
     ...slice,
     photos: Array.isArray(slice.photos)
       ? slice.photos.map((p) => ({
           ...p,
+          imageUrl:
+            p.imageUrl &&
+            (p.imageUrl.startsWith('data:') && p.imageUrl.length > 140000
+              ? '__cloud_blob__'
+              : p.imageUrl === '__idb_blob__'
+              ? '__cloud_blob__'
+              : p.imageUrl),
           uploadedByAvatarDataUrl:
             p.uploadedByAvatarDataUrl && p.uploadedByAvatarDataUrl.length > 12000
               ? undefined

@@ -64,6 +64,7 @@ import {
   getDeviceId,
   getDeviceLabel,
   hasAnySharedModule,
+  hydratePhotosFromLocalCache,
   loginCloudAccount,
   loginWithGoogleCloudAccount,
   logoutCloudAccount,
@@ -71,11 +72,13 @@ import {
   resolveModuleWorkspaceKey,
   sanitizeFirestoreId,
   saveHouseholdState,
+  savePhotosSafelyToLocalStorage,
   transferPrivateContentToShared,
   updateCloudAccountProfile,
   upgradeCategoriesToVibrant,
   WorkspaceDataSlice,
 } from './utils/cloudHouseholdSync';
+import { completeBridgedGooglePhotosConnect } from './utils/googlePhotosClient';
 import { useOnlineStatus } from './hooks/usePWAInstall';
 import { HomeView } from './components/HomeView';
 import { CalendarView } from './components/CalendarView';
@@ -411,8 +414,40 @@ export default function App() {
     localStorage.setItem('vn_budget_v2', JSON.stringify(budgetMonths));
   }, [budgetMonths]);
   useEffect(() => {
-    localStorage.setItem('vn_photos_v1', JSON.stringify(photos));
+    savePhotosSafelyToLocalStorage('vn_photos_v1', photos);
   }, [photos]);
+
+  // Hydrate full-resolution original photos from IndexedDB on startup & handle Google Photos OAuth bridge if requested
+  useEffect(() => {
+    let active = true;
+    hydratePhotosFromLocalCache(photos).then((hydrated) => {
+      if (!active) return;
+      const changed = hydrated.some(
+        (p, idx) => p.imageUrl !== photos[idx]?.imageUrl
+      );
+      if (changed) {
+        setPhotos(hydrated);
+      }
+    });
+
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const bridgeSessionId = params.get('googlePhotosConnect');
+      if (bridgeSessionId) {
+        completeBridgedGooglePhotosConnect(bridgeSessionId).finally(() => {
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        });
+      }
+    } catch {
+      // Ignore
+    }
+
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     localStorage.setItem('vn_photo_albums_v1', JSON.stringify(photoAlbums));
   }, [photoAlbums]);

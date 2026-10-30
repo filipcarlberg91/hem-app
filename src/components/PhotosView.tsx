@@ -803,7 +803,7 @@ export const PhotosView: React.FC<PhotosViewProps> = ({
             >
               {isCompressing && (
                 <div className="rounded-2xl bg-[#E4F3EA] p-4 text-xs font-bold text-[#183D2C] text-center">
-                  Optimerar bildkvalitet för snabb delning...
+                  Läser in bild i originalstorlek (full upplösning)...
                 </div>
               )}
 

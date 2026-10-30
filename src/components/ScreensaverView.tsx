@@ -59,8 +59,12 @@ import {
 import { getTodayDateString } from '../data/initialData';
 import { classifySwedishGrocery } from '../utils/swedishGrocerySorter';
 import { getApiUrl } from '../utils/apiUrl';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth } from '../firebase';
+import {
+  checkGooglePhotosRedirectResult,
+  fetchSharedGooglePhotosAlbum,
+  pollGooglePhotosPickerSession,
+  startGooglePhotosOAuthFlow,
+} from '../utils/googlePhotosClient';
 import { HomeView } from './HomeView';
 import {
   approveHueBridgeInChrome,
@@ -890,12 +894,17 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          return parsed.filter(
-            (item: any) =>
-              item &&
-              typeof item.imageUrl === 'string' &&
-              item.imageUrl.trim().length > 0
-          );
+          return parsed
+            .filter(
+              (item: any) =>
+                item &&
+                typeof item.imageUrl === 'string' &&
+                item.imageUrl.trim().length > 0
+            )
+            .map((item: any) => ({
+              ...item,
+              imageUrl: String(item.imageUrl).replace(/=w1920-h1080$/, '=w3840-h2160'),
+            }));
         }
       }
     } catch {
@@ -912,6 +921,10 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
   const [isFetchingGooglePhotos, setIsFetchingGooglePhotos] = useState(false);
   const [googlePhotosStatus, setGooglePhotosStatus] = useState<string | null>(null);
   const [googlePickerUri, setGooglePickerUri] = useState<string | null>(null);
+  const [googlePickerSession, setGooglePickerSession] = useState<{
+    sessionId: string;
+    accessToken: string;
+  } | null>(null);
 
   // Customizable M3 Expressive Widgets for all 7 pages
   const [widgetsConfig, setWidgetsConfig] = useState<HubWidgetConfigItem[]>(() =>
@@ -984,7 +997,7 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     [paletteId]
   );
 
-  // Fetch photos from a shared Google Photos album link via backend proxy
+  // Fetch photos from a shared Google Photos album link (works directly in browser/mobile + backend fallback)
   const handleFetchSharedGooglePhotosAlbum = useCallback(
     async (urlOverride?: string, silent = false) => {
       const targetUrl = (urlOverride ?? googlePhotosAlbumUrl).trim();
@@ -998,27 +1011,12 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
       }
       if (!silent) {
         setIsFetchingGooglePhotos(true);
-        setGooglePhotosStatus('Hämtar högupplösta bilder från Google Foto...');
+        setGooglePhotosStatus('Hämtar bilder i full upplösning från Google Foto...');
       }
       try {
-        const res = await fetch(getApiUrl('/api/google-photos/shared-album'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ albumUrl: targetUrl }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !Array.isArray(data?.photos) || data.photos.length === 0) {
-          if (!silent) {
-            setGooglePhotosStatus(
-              data?.error ||
-                'Kunde inte hämta bilder från länken. Kontrollera att albumet är delat i Google Foto.'
-            );
-          }
-          return;
-        }
-        const fetchedList: Array<{ id: string; imageUrl: string; caption: string }> =
-          data.photos;
-        const label = String(data.albumTitle || 'Google Foto-album');
+        const result = await fetchSharedGooglePhotosAlbum(targetUrl);
+        const fetchedList = result.photos;
+        const label = String(result.albumTitle || 'Google Foto-album');
         setGooglePhotosList(fetchedList);
         setGooglePhotosAccountLabel(label);
         try {
@@ -1033,13 +1031,14 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
           setPhotoSlideIdx(0);
           localStorage.setItem(HUB_PHOTO_ALBUM_KEY, 'GOOGLE_PHOTOS');
           setGooglePhotosStatus(
-            `Hämtade ${fetchedList.length} bilder från "${label}" i Google Foto!`
+            `Hämtade ${fetchedList.length} bilder i originalupplösning från "${label}"!`
           );
         }
-      } catch {
+      } catch (err: any) {
         if (!silent) {
           setGooglePhotosStatus(
-            'Kunde inte nå Google Foto-tjänsten just nu. Kontrollera internetanslutningen.'
+            err?.message ||
+              'Kunde inte hämta bilder från länken. Kontrollera att länkdelning är aktiverad i Google Foto.'
           );
         }
       } finally {
@@ -1057,138 +1056,142 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
     setGooglePhotosStatus('Öppnar Google-inloggning för Google Foto...');
     setGooglePickerUri(null);
     try {
-      const provider = new GoogleAuthProvider();
-      provider.addScope('https://www.googleapis.com/auth/photospicker.mediaitems.readonly');
-      provider.addScope('https://www.googleapis.com/auth/photoslibrary.readonly');
-      provider.addScope('https://www.googleapis.com/auth/drive.photos.readonly');
-      provider.addScope('https://www.googleapis.com/auth/drive.readonly');
-      provider.setCustomParameters({ prompt: 'consent select_account' });
+      const res = await startGooglePhotosOAuthFlow((msg) => setGooglePhotosStatus(msg));
 
-      const result = await signInWithPopup(auth, provider);
-      const cred = GoogleAuthProvider.credentialFromResult(result);
-      const accessToken = cred?.accessToken;
-      const email = result.user?.email || 'Google-konto';
-
-      if (!accessToken) {
-        setGooglePhotosStatus('Kunde inte hämta åtkomsttoken från Google.');
-        setIsFetchingGooglePhotos(false);
-        return;
+      if (res.pickerUri) {
+        setGooglePickerUri(res.pickerUri);
       }
-
-      const collected: Array<{ id: string; imageUrl: string; caption: string }> = [];
-
-      // 1. Try Google Photos Library API (mediaItems)
-      try {
-        const libRes = await fetch(
-          'https://photoslibrary.googleapis.com/v1/mediaItems?pageSize=60',
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }
-        );
-        if (libRes.ok) {
-          const libData = await libRes.json();
-          if (Array.isArray(libData?.mediaItems)) {
-            for (const item of libData.mediaItems) {
-              if (item?.baseUrl && (!item.mimeType || item.mimeType.startsWith('image/'))) {
-                collected.push({
-                  id: `gphoto-lib-${item.id}`,
-                  imageUrl: `${item.baseUrl}=w1920-h1080`,
-                  caption: item.description || item.filename || 'Google Foto',
-                });
-              }
-            }
-          }
-        }
-      } catch {
-        // Ignore if Photos Library API scope is restricted on project
-      }
-
-      // 2. Try Google Photos Picker API (creates interactive picker session if needed)
-      try {
-        const pickerRes = await fetch('https://photospicker.googleapis.com/v1/sessions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({}),
+      if (res.pickerSessionId && res.accessToken) {
+        setGooglePickerSession({
+          sessionId: res.pickerSessionId,
+          accessToken: res.accessToken,
         });
-        if (pickerRes.ok) {
-          const pickerData = await pickerRes.json();
-          if (pickerData?.pickerUri) {
-            setGooglePickerUri(String(pickerData.pickerUri));
-          }
-        }
-      } catch {
-        // Ignore
       }
 
-      // 3. Also check Google Drive image files / Google Photos backup folder
-      if (collected.length === 0) {
-        try {
-          const driveRes = await fetch(
-            "https://www.googleapis.com/drive/v3/files?q=mimeType contains 'image/' and trashed=false&pageSize=60&fields=files(id,name,thumbnailLink,webContentLink)",
-            {
-              headers: { Authorization: `Bearer ${accessToken}` },
-            }
-          );
-          if (driveRes.ok) {
-            const driveData = await driveRes.json();
-            if (Array.isArray(driveData?.files)) {
-              for (const f of driveData.files) {
-                if (f?.thumbnailLink) {
-                  const hiRes = String(f.thumbnailLink).replace(/=s\d+.*$/, '=w1920-h1080');
-                  collected.push({
-                    id: `gdrive-photo-${f.id}`,
-                    imageUrl: hiRes,
-                    caption: String(f.name || 'Google Foto').replace(/\.[^/.]+$/, ''),
-                  });
-                }
-              }
-            }
-          }
-        } catch {
-          // Ignore
-        }
-      }
-
-      if (collected.length > 0) {
-        const merged = [...collected, ...googlePhotosList].filter(
+      if (res.photos.length > 0) {
+        const merged = [...res.photos, ...googlePhotosList].filter(
           (v, idx, arr) => arr.findIndex((x) => x.imageUrl === v.imageUrl) === idx
         );
         setGooglePhotosList(merged);
-        setGooglePhotosAccountLabel(email);
+        setGooglePhotosAccountLabel(res.email);
         setSelectedAlbumId('GOOGLE_PHOTOS');
         setPhotoSlideIdx(0);
         try {
           localStorage.setItem(HUB_GOOGLE_PHOTOS_ITEMS_KEY, JSON.stringify(merged));
-          localStorage.setItem(HUB_GOOGLE_PHOTOS_ACCOUNT_KEY, email);
+          localStorage.setItem(HUB_GOOGLE_PHOTOS_ACCOUNT_KEY, res.email);
           localStorage.setItem(HUB_PHOTO_ALBUM_KEY, 'GOOGLE_PHOTOS');
         } catch {
           // Ignore
         }
         setGooglePhotosStatus(
-          `Kopplad till Google Foto (${email}) — ${collected.length} bilder synkade!`
+          `Kopplad till Google Foto (${res.email}) — ${res.photos.length} bilder synkade i full upplösning!`
         );
       } else {
-        setGooglePhotosAccountLabel(email);
+        setGooglePhotosAccountLabel(res.email);
         try {
-          localStorage.setItem(HUB_GOOGLE_PHOTOS_ACCOUNT_KEY, email);
+          localStorage.setItem(HUB_GOOGLE_PHOTOS_ACCOUNT_KEY, res.email);
         } catch {
           // Ignore
         }
         setGooglePhotosStatus(
-          `Inloggad som ${email}. Klistra in en delningslänk till ditt Google Foto-album nedan för att synka hela albumet direkt i full HD!`
+          res.pickerUri
+            ? `Inloggad som ${res.email}! Klicka på "Öppna Google Foto" nedan för att välja bilder, eller klistra in en delad albumlänk.`
+            : `Inloggad som ${res.email}. Klistra in en delningslänk till ditt Google Foto-album nedan för att synka hela albumet direkt!`
         );
       }
     } catch (err: any) {
+      const msg = String(err?.message || '');
+      if (msg === ' OAUTH_REDIRECT_STARTED ' || msg.includes('OAUTH_REDIRECT_STARTED')) {
+        return;
+      }
       setGooglePhotosStatus(
-        err?.message || 'Inloggningen mot Google avbröts. Du kan även klistra in en albumlänk från Google Foto nedan.'
+        msg ||
+          'Inloggningen mot Google avbröts. Du kan även klistra in en delad albumlänk från Google Foto direkt i fältet nedan.'
       );
     } finally {
       setIsFetchingGooglePhotos(false);
     }
   }, [googlePhotosList]);
+
+  // Check if returning from a Google OAuth redirect flow
+  useEffect(() => {
+    let active = true;
+    checkGooglePhotosRedirectResult().then((res) => {
+      if (!active || !res) return;
+      if (res.pickerUri) setGooglePickerUri(res.pickerUri);
+      if (res.pickerSessionId && res.accessToken) {
+        setGooglePickerSession({
+          sessionId: res.pickerSessionId,
+          accessToken: res.accessToken,
+        });
+      }
+      if (res.photos.length > 0) {
+        setGooglePhotosList((prev) => {
+          const merged = [...res.photos, ...prev].filter(
+            (v, idx, arr) => arr.findIndex((x) => x.imageUrl === v.imageUrl) === idx
+          );
+          try {
+            localStorage.setItem(HUB_GOOGLE_PHOTOS_ITEMS_KEY, JSON.stringify(merged));
+          } catch {
+            // Ignore
+          }
+          return merged;
+        });
+        setSelectedAlbumId('GOOGLE_PHOTOS');
+        localStorage.setItem(HUB_PHOTO_ALBUM_KEY, 'GOOGLE_PHOTOS');
+      }
+      if (res.email) {
+        setGooglePhotosAccountLabel(res.email);
+        localStorage.setItem(HUB_GOOGLE_PHOTOS_ACCOUNT_KEY, res.email);
+        setGooglePhotosStatus(
+          `Kopplad till Google Foto (${res.email})${
+            res.photos.length > 0 ? ` — ${res.photos.length} bilder synkade!` : '!'
+          }`
+        );
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Poll active Google Photos Picker session when user selects photos in Google Photos Picker
+  useEffect(() => {
+    if (!googlePickerSession) return;
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      if (cancelled) return;
+      const picked = await pollGooglePhotosPickerSession(
+        googlePickerSession.sessionId,
+        googlePickerSession.accessToken
+      );
+      if (!cancelled && picked && picked.length > 0) {
+        setGooglePhotosList((prev) => {
+          const merged = [...picked, ...prev].filter(
+            (v, idx, arr) => arr.findIndex((x) => x.imageUrl === v.imageUrl) === idx
+          );
+          try {
+            localStorage.setItem(HUB_GOOGLE_PHOTOS_ITEMS_KEY, JSON.stringify(merged));
+          } catch {
+            // Ignore
+          }
+          return merged;
+        });
+        setSelectedAlbumId('GOOGLE_PHOTOS');
+        setPhotoSlideIdx(0);
+        localStorage.setItem(HUB_PHOTO_ALBUM_KEY, 'GOOGLE_PHOTOS');
+        setGooglePhotosStatus(
+          `Hämtade ${picked.length} valda bilder från Google Foto i full upplösning!`
+        );
+        setGooglePickerSession(null);
+        setGooglePickerUri(null);
+      }
+    }, 3500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [googlePickerSession]);
 
   // Auto-refresh shared Google Photos album when screensaver opens
   useEffect(() => {
@@ -3044,7 +3047,8 @@ export const ScreensaverView: React.FC<ScreensaverViewProps> = ({
                   className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
                 >
                   <input
-                    type="url"
+                    type="text"
+                    inputMode="url"
                     value={googlePhotosAlbumUrl}
                     onChange={(e) => setGooglePhotosAlbumUrl(e.target.value)}
                     placeholder="Klistra in delad Google Foto-länk (https://photos.app.goo.gl/...)"
