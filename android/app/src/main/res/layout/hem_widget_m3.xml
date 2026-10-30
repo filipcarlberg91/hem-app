@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/hem_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/hem_widget_m3_surface"
+    android:paddingLeft="14dp"
+    android:paddingTop="13dp"
+    android:paddingRight="14dp"
+    android:paddingBottom="12dp">
+
+    <!-- Clean Google Calendar / Google Tasks Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/hem_widget_icon_badge"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/hem_widget_m3_icon_squircle"
+            android:gravity="center"
+            android:text="✓"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/hem_widget_subtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="HEM"
+                android:textColor="#5F6368"
+                android:textSize="9.5sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/hem_widget_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Oktober"
+                android:textColor="#1C1F26"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/hem_widget_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/hem_widget_m3_badge"
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:text="0"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/hem_widget_add_btn"
+            android:layout_width="44dp"
+            android:layout_height="30dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/hem_widget_m3_add_circle"
+            android:gravity="center"
+            android:text="+"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp" />
+    </LinearLayout>
+
+    <!-- Scrollable ListView for All Items in Widget -->
+    <ListView
+        android:id="@+id/hem_widget_listview"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="10dp"
+        android:divider="@android:color/transparent"
+        android:dividerHeight="5dp"
+        android:scrollbars="vertical" />
+
+    <!-- Clean Empty State Card -->
+    <LinearLayout
+        android:id="@+id/hem_widget_empty_card"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/hem_widget_m3_inner_card"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/hem_widget_empty_icon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@drawable/hem_widget_m3_badge"
+            android:gravity="center"
+            android:text="✓"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/hem_widget_body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="Alla uppgifter är avklarade!"
+            android:textColor="#1C1F26"
+            android:textSize="13.5sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/hem_widget_empty_sub"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center"
+            android:text="Tryck på + för att lägga till"
+            android:textColor="#5F6368"
+            android:textSize="11sp" />
+    </LinearLayout>
+</LinearLayout>

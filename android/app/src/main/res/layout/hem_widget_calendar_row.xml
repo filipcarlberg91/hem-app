@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/hem_cal_row_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="top">
+
+    <!-- Left Day Indicator Column (Google Calendar Schedule Style) -->
+    <FrameLayout
+        android:id="@+id/hem_cal_day_col"
+        android:layout_width="40dp"
+        android:layout_height="38dp"
+        android:layout_marginEnd="6dp">
+
+        <ImageView
+            android:id="@+id/hem_cal_day_badge_bg"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="center"
+            android:src="@drawable/hem_widget_cal_today_circle"
+            android:visibility="visible" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/hem_cal_day_dow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:text="Mån"
+                android:textColor="#FFFFFF"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/hem_cal_day_num"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:text="22"
+                android:textColor="#FFFFFF"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Right Colored Event Card -->
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:minHeight="38dp">
+
+        <ImageView
+            android:id="@+id/hem_cal_row_bg_img"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitXY"
+            android:src="@drawable/hem_widget_m3_cal_card_shape" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:orientation="vertical"
+            android:paddingLeft="12dp"
+            android:paddingTop="7dp"
+            android:paddingRight="12dp"
+            android:paddingBottom="7dp">
+
+            <TextView
+                android:id="@+id/hem_cal_row_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Händelse"
+                android:textColor="#FFFFFF"
+                android:textSize="13.5sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/hem_cal_row_datetime"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="14:30–15:30"
+                android:textColor="#EBFFFFFF"
+                android:textSize="11.5sp" />
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>

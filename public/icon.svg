@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="roofGrad" x1="256" y1="84" x2="256" y2="236" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#21543D"/>
+      <stop offset="100%" stop-color="#143325"/>
+    </linearGradient>
+    <linearGradient id="calGrad" x1="112" y1="244" x2="244" y2="412" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Clean White Background matching Google Pixel Icons -->
+  <rect width="512" height="512" rx="116" fill="#FFFFFF"/>
+
+  <!-- Centered & Proportionally Scaled House Glyph -->
+  <g transform="translate(256, 256) scale(0.64) translate(-256, -248)">
+    <!-- Expressive House Roof (Gable) -->
+    <path
+      d="M106 226 L235 106 C247 95 265 95 277 106 L406 226"
+      stroke="url(#roofGrad)"
+      stroke-width="38"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Skylight Dot under the Roof Peak -->
+    <circle cx="256" cy="178" r="22" fill="#183D2C"/>
+    <circle cx="256" cy="178" r="12" fill="#A6F2C6"/>
+
+    <!-- Left Bento Tile: Calendar Card (Vibrant Blue) -->
+    <rect x="112" y="244" width="132" height="168" rx="34" fill="url(#calGrad)"/>
+    <!-- Calendar Header Pill -->
+    <rect x="136" y="270" width="84" height="18" rx="9" fill="#FFFFFF" fill-opacity="0.32"/>
+    <!-- Calendar Date Dots -->
+    <circle cx="150" cy="322" r="11" fill="#FFFFFF"/>
+    <circle cx="178" cy="322" r="11" fill="#FFFFFF"/>
+    <circle cx="206" cy="322" r="11" fill="#BAE6FD"/>
+    <circle cx="150" cy="356" r="11" fill="#FFFFFF"/>
+    <circle cx="178" cy="356" r="11" fill="#FDE047"/>
+    <circle cx="206" cy="356" r="11" fill="#FFFFFF" fill-opacity="0.55"/>
+
+    <!-- Top-Right Bento Pill: Notes & Shopping (Warm Amber) -->
+    <rect x="264" y="244" width="136" height="76" rx="30" fill="#FB923C"/>
+    <circle cx="300" cy="282" r="12" fill="#FFFFFF"/>
+    <rect x="322" y="274" width="54" height="16" rx="8" fill="#FFFFFF"/>
+
+    <!-- Bottom-Right Bento Pill: Tasks & Checklists (Mint Green with Deep Forest Checkmark) -->
+    <rect x="264" y="336" width="136" height="76" rx="30" fill="#A6F2C6" stroke="#6EE7B7" stroke-width="3"/>
+    <path
+      d="M292 374 L305 387 L330 361"
+      stroke="#143325"
+      stroke-width="12"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <rect x="344" y="366" width="36" height="16" rx="8" fill="#143325" fill-opacity="0.35"/>
+  </g>
+</svg>

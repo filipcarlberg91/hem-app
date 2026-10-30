@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Integritetspolicy – Hem (se.carlberg.hem)</title>
+  <meta name="description" content="Integritetspolicy och dataskyddsinformation för appen Hem (se.carlberg.hem) på Google Play och webben." />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <style>
+    :root {
+      --bg: #F6FBF7;
+      --card: #FFFFFF;
+      --border: #D8E6DD;
+      --primary: #183D2C;
+      --accent: #E7F3EC;
+      --text: #141E18;
+      --muted: #54685C;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+    }
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    .header-card {
+      background-color: var(--primary);
+      color: #FFFFFF;
+      border-radius: 24px;
+      padding: 32px 28px;
+      margin-bottom: 24px;
+    }
+    .header-card .badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      color: #A6F2C6;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+    .header-card h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 800;
+    }
+    .header-card p {
+      margin: 0;
+      color: #CDE8D8;
+      font-size: 14px;
+    }
+    .section-card {
+      background-color: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 24px 28px;
+      margin-bottom: 16px;
+    }
+    h2 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--primary);
+    }
+    p, li {
+      font-size: 14px;
+      color: var(--text);
+    }
+    ul {
+      padding-left: 20px;
+      margin: 8px 0;
+    }
+    li {
+      margin-bottom: 6px;
+    }
+    .meta {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    a {
+      color: var(--primary);
+      font-weight: 700;
+    }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background-color: var(--accent);
+      color: var(--primary);
+      text-decoration: none;
+      padding: 10px 18px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="./" class="back-btn">← Tillbaka till Hem</a>
+
+    <div class="header-card">
+      <div class="badge">Officiell Integritetspolicy · Privacy Policy</div>
+      <h1>Integritetspolicy för Hem</h1>
+      <p>App-ID: se.carlberg.hem · Utvecklare: Filip Carlberg · Senast uppdaterad: 19 oktober 2026</p>
+    </div>
+
+    <div class="section-card">
+      <h2>1. Översikt och syfte</h2>
+      <p>
+        <strong>Hem</strong> (paketnamn <code>se.carlberg.hem</code>) är en hushålls- och familjeapp för att hantera kalender, att göra-uppgifter, anteckningar, inköpslista, recept, månadsbudget samt familjebilder. Denna integritetspolicy förklarar vilken information som behandlas i appen, hur den lagras och hur du själv kontrollerar och kan radera dina uppgifter.
+      </p>
+    </div>
+
+    <div class="section-card">
+      <h2>2. Vilka uppgifter som samlas in och lagras</h2>
+      <p>Appen samlar endast in de uppgifter som du själv väljer att mata in för att appens funktioner ska fungera:</p>
+      <ul>
+        <li><strong>Kontouppgifter:</strong> Namn, e-postadress, valfri rolltitel, valfri profilbild samt ett krypterat (SHA-256-hashat) lösenord.</li>
+        <li><strong>Hushålls- och planeringsdata:</strong> Kalenderhändelser, att göra-uppgifter, anteckningar, inköpslistor, recept och budgetposter som du skapar i appen.</li>
+        <li><strong>Bilder och album:</strong> Bilder, bildtexter, album, reaktioner och kommentarer som du själv väljer att ladda upp på sidan <em>Bilder &amp; Album</em>.</li>
+        <li><strong>Tekniskt enhets-ID:</strong> Ett lokalt slumpmässigt genererat ID (t.ex. för att kunna skilja på notiser mellan din telefon och din surfplatta).</li>
+      </ul>
+      <p>Appen samlar <strong>inte</strong> in GPS-position, kontaktlistor från telefonboken, mikrofonljud, sökhistorik eller reklam-ID.</p>
+    </div>
+
+    <div class="section-card">
+      <h2>3. Behörigheter i Android / iOS</h2>
+      <ul>
+        <li><strong>Notiser (<code>POST_NOTIFICATIONS</code>):</strong> Används enbart för att visa påminnelser om kalenderhändelser, uppgifter och uppdateringar från familjemedlemmar som du delar sidor med.</li>
+        <li><strong>Bakgrundssynkronisering (<code>WAKE_LOCK</code>, <code>RECEIVE_BOOT_COMPLETED</code>, <code>SCHEDULE_EXACT_ALARM</code>):</strong> Används enbart för att leverera dina schemalagda påminnelser och hushållsnotiser i tid även när skärmen är låst.</li>
+        <li><strong>Val av bilder (Systemets bildväljare):</strong> När du väljer att ladda upp en profilbild eller en bild till ett album väljer du själv enstaka bilder via enhetens inbyggda fil-/bildväljare.</li>
+      </ul>
+    </div>
+
+    <div class="section-card">
+      <h2>4. Delning av data och tredjeparter</h2>
+      <ul>
+        <li><strong>Ingen försäljning eller reklam:</strong> Dina personuppgifter säljs, hyrs ut eller delas <strong>aldrig</strong> med annonsnätverk, datamäklare eller analysföretag.</li>
+        <li><strong>Delning inom familj/krets:</strong> Du styr själv i din profil med individuella switchar för varje sida (Kalender, Att göra, Anteckningar, Inköpslista, Recept, Budget, Bilder) exakt vilka familjemedlemmar eller vänner som får se respektive sida. Sidor som inte delas är helt privata för dig.</li>
+        <li><strong>Valfri Google-synkronisering:</strong> Om du aktivt väljer att koppla ditt Google-konto synkroniseras kalender/uppgifter direkt mot Googles officiella API:er över krypterad HTTPS-anslutning.</li>
+      </ul>
+    </div>
+
+    <div class="section-card">
+      <h2>5. Datalagring och säkerhet</h2>
+      <p>
+        All kommunikation mellan appen och molnlagringen sker krypterat via HTTPS (TLS). Lösenord lagras aldrig i klartext utan enbart som kryptografiska kontrollsummor (SHA-256). Data lagras även lokalt på din enhet (<code>localStorage</code>) för att appen ska fungera snabbt och även utan internetuppkoppling.
+      </p>
+    </div>
+
+    <div class="section-card" id="radera-konto">
+      <h2>6. Radering av konto och data (Account &amp; Data Deletion)</h2>
+      <p>Du har full kontroll över din data och kan när som helst ta bort innehåll eller begära fullständig kontoradering:</p>
+      <ul>
+        <li><strong>Radera enskilda poster direkt i appen:</strong> Du kan när som helst radera kalenderhändelser, uppgifter, anteckningar, inköpsvaror, recept, budgetposter, bilder, kommentarer och delningskopplingar direkt i appen.</li>
+        <li><strong>Begära fullständig radering av konto och all lagrad data:</strong> Skicka ett e-postmeddelande till <a href="mailto:filipcarlberg91@gmail.com?subject=Radera%20konto%20i%20Hem">filipcarlberg91@gmail.com</a> från den e-postadress ditt konto är registrerat med, så raderas ditt konto och all tillhörande data permanent inom 7 dagar.</li>
+      </ul>
+    </div>
+
+    <div class="section-card">
+      <h2>7. Summary in English (For Google Play Review)</h2>
+      <p>
+        <strong>Hem</strong> (<code>se.carlberg.hem</code>) is a private family and household organizer app. We only collect information explicitly entered by the user (name, email address, hashed password, calendar events, tasks, notes, shopping lists, recipes, budget entries, and user-selected photos).
+      </p>
+      <ul>
+        <li><strong>No Ads or Tracking:</strong> We do not use any third-party advertising SDKs, analytics trackers, or sell user data to third parties.</li>
+        <li><strong>User-Controlled Sharing:</strong> Data is private by default and only shared with specific family members invited by the user via per-module sharing toggles.</li>
+        <li><strong>Data &amp; Account Deletion:</strong> Users can delete any content directly inside the app at any time, or request complete account and data deletion by emailing <a href="mailto:filipcarlberg91@gmail.com">filipcarlberg91@gmail.com</a>.</li>
+      </ul>
+    </div>
+
+    <div class="section-card">
+      <h2>8. Kontaktuppgifter</h2>
+      <p class="meta">
+        Har du frågor om denna integritetspolicy eller hur dina uppgifter hanteras?<br />
+        <strong>Personuppgiftsansvarig / Utvecklare:</strong> Filip Carlberg<br />
+        <strong>E-post:</strong> <a href="mailto:filipcarlberg91@gmail.com">filipcarlberg91@gmail.com</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
