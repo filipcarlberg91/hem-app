@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hem – Mapp med alla AAB- & APK-filer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(145deg, #120b1d 0%, #1e1330 55%, #0c0714 100%);
+      color: #f8fafc;
+      min-height: 100dvh;
+      padding: 28px 16px 60px;
+    }
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+    }
+    .header {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 28px;
+      padding: 24px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(16px);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #fde047;
+      color: #422006;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 900;
+      margin-bottom: 6px;
+    }
+    p.sub {
+      color: rgba(248, 250, 252, 0.75);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .zip-hero {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: linear-gradient(135deg, rgba(253, 224, 71, 0.18), rgba(245, 208, 254, 0.14));
+      border: 2px solid rgba(253, 224, 71, 0.5);
+      border-radius: 26px;
+      padding: 20px 22px;
+      margin-bottom: 20px;
+    }
+    .zip-hero h2 {
+      font-size: 18px;
+      font-weight: 900;
+      color: #fef08a;
+      margin-bottom: 4px;
+    }
+    .zip-hero p {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.85);
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: #fde047;
+      color: #422006;
+      font-weight: 900;
+      font-size: 14px;
+      text-decoration: none;
+      padding: 13px 20px;
+      border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(250, 204, 21, 0.3);
+      transition: transform 0.15s ease;
+    }
+    .btn-primary:active {
+      transform: scale(0.96);
+    }
+    .folder-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .file-card {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 22px;
+      padding: 16px 20px;
+    }
+    .file-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+      flex: 1;
+    }
+    .file-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .file-name {
+      font-weight: 800;
+      font-size: 15px;
+      color: #fff;
+      word-break: break-all;
+    }
+    .file-desc {
+      font-size: 12.5px;
+      color: rgba(255, 255, 255, 0.68);
+      margin-top: 2px;
+    }
+    .file-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .btn-dl {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 800;
+      font-size: 13px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    .btn-dl:hover {
+      background: rgba(255, 255, 255, 0.22);
+    }
+    .back-link {
+      display: inline-block;
+      margin-top: 24px;
+      color: #f5d0fe;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="badge">📁 Direktmapp · AAB & APK (Uppdaterad VersionCode)</div>
+      <h1>Alla AAB- & APK-filer för Hem</h1>
+      <p class="sub">
+        <strong>Tips för Google Play Console ("Slutet test"):</strong><br />
+        1. Klicka på <strong>"Släng utkastversion"</strong> i Google Play Console om du har ett gammalt utkast.<br />
+        2. Skapa en ny version och ladda <strong>ENDAST</strong> upp <strong><code>Hem-Google-Play-Signed.aab</code></strong> i det vanliga spåret för mobil &amp; surfplatta. (Lägg <em>inte</em> in Wear OS-filen i samma version – Wear OS laddas bara upp under formfaktorn Wear OS).
+      </p>
+    </div>
+
+    <div class="zip-hero">
+      <div>
+        <h2>📦 Ladda ner hela mappen som ZIP (Alla AAB + APK)</h2>
+        <p>Innehåller både Android AAB, Wear OS AAB, Android APK, Wear OS APK och Play Store-ikonen.</p>
+      </div>
+      <a class="btn-primary" href="https://github.com/filipcarlberg91/hem-app/releases/download/latest-build/hem-google-play-aab.zip" download>
+        ⬇️ Ladda ner hem-google-play-aab.zip
+      </a>
+    </div>
+
+    <div class="folder-list">
+      <div class="file-card">
+        <div class="file-info">
+          <div class="file-icon">📲</div>
+          <div>
+            <div class="file-name">Hem-Google-Play-Signed.aab</div>
+            <div class="file-desc">Signerad Android App Bundle (.aab) för telefon & surfplatta (Google Play Console)</div>
+          </div>
+        </div>
+        <div class="file-actions">
+          <a class="btn-primary" href="https://github.com/filipcarlberg91/hem-app/releases/download/latest-build/Hem-Google-Play-Signed.aab" download>
+            ⬇️ Ladda ner .AAB
+          </a>
+          <a class="btn-dl" href="https://filipcarlberg91.github.io/hem-app/Hem-Google-Play-Signed.aab" download>
+            Spegel 2
+          </a>
+        </div>
+      </div>
+
+      <div class="file-card">
+        <div class="file-info">
+          <div class="file-icon">⌚</div>
+          <div>
+            <div class="file-name">Hem-WearOS-Google-Play-Signed.aab</div>
+            <div class="file-desc">Signerad Wear OS App Bundle (.aab) för smartklocka (Google Play Console)</div>
+          </div>
+        </div>
+        <div class="file-actions">
+          <a class="btn-primary" href="https://github.com/filipcarlberg91/hem-app/releases/download/latest-build/Hem-WearOS-Google-Play-Signed.aab" download>
+            ⬇️ Ladda ner .AAB
+          </a>
+          <a class="btn-dl" href="https://filipcarlberg91.github.io/hem-app/Hem-WearOS-Google-Play-Signed.aab" download>
+            Spegel 2
+          </a>
+        </div>
+      </div>
+
+      <div class="file-card">
+        <div class="file-info">
+          <div class="file-icon">📱</div>
+          <div>
+            <div class="file-name">Hem-Direktinstallation.apk</div>
+            <div class="file-desc">Direktinstallerbar Android APK för telefon & surfplatta</div>
+          </div>
+        </div>
+        <div class="file-actions">
+          <a class="btn-dl" href="https://github.com/filipcarlberg91/hem-app/releases/download/latest-build/Hem-Direktinstallation.apk" download>
+            ⬇️ Ladda ner .APK
+          </a>
+        </div>
+      </div>
+
+      <div class="file-card">
+        <div class="file-info">
+          <div class="file-icon">⌚</div>
+          <div>
+            <div class="file-name">Hem-WearOS.apk</div>
+            <div class="file-desc">Direktinstallerbar Wear OS APK för smartklocka</div>
+          </div>
+        </div>
+        <div class="file-actions">
+          <a class="btn-dl" href="https://github.com/filipcarlberg91/hem-app/releases/download/latest-build/Hem-WearOS.apk" download>
+            ⬇️ Ladda ner .APK
+          </a>
+        </div>
+      </div>
+
+      <div class="file-card">
+        <div class="file-info">
+          <div class="file-icon">🎨</div>
+          <div>
+            <div class="file-name">Hem-Play-Store-Appikon-512x512.png</div>
+            <div class="file-desc">Högupplöst 512x512 appikon för Google Play Console</div>
+          </div>
+        </div>
+        <div class="file-actions">
+          <a class="btn-dl" href="https://github.com/filipcarlberg91/hem-app/releases/download/latest-build/Hem-Play-Store-Appikon-512x512.png" download>
+            ⬇️ Ladda ner .PNG
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <a class="back-link" href="/">← Tillbaka till Hem</a>
+  </div>
+</body>
+</html>

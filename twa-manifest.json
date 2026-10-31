@@ -1,0 +1,39 @@
+{
+  "packageId": "se.carlberg.hem",
+  "host": "ais-pre-fogx2dfqvxuv367did2b7p-610632574360.europe-west2.run.app",
+  "name": "Hem",
+  "launcherName": "Hem",
+  "display": "standalone",
+  "themeColor": "#183D2C",
+  "navigationColor": "#F6FBF7",
+  "navigationColorDark": "#141E18",
+  "navigationDividerColor": "#D8E6DD",
+  "navigationDividerColorDark": "#183D2C",
+  "backgroundColor": "#F6FBF7",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://ais-pre-fogx2dfqvxuv367did2b7p-610632574360.europe-west2.run.app/pwa-512x512.png",
+  "maskableIconUrl": "https://ais-pre-fogx2dfqvxuv367did2b7p-610632574360.europe-west2.run.app/pwa-maskable-512x512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "hem-key"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://ais-pre-fogx2dfqvxuv367did2b7p-610632574360.europe-west2.run.app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://ais-pre-fogx2dfqvxuv367did2b7p-610632574360.europe-west2.run.app/",
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": []
+}

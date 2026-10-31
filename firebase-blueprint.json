@@ -1,0 +1,193 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile isolated to the authenticated owner.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the account owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Lowercase email address of the user.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the user.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "roleTitle": {
+          "type": "string",
+          "description": "Optional household role label.",
+          "minLength": 0,
+          "maxLength": 80
+        },
+        "avatarColor": {
+          "type": "string",
+          "description": "Hex color for the user avatar.",
+          "minLength": 4,
+          "maxLength": 16
+        },
+        "profileJson": {
+          "type": "string",
+          "description": "Serialized profile preferences and connections.",
+          "minLength": 2,
+          "maxLength": 250000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was last updated."
+        }
+      },
+      "required": ["uid", "email", "name", "avatarColor", "profileJson", "createdAt", "updatedAt"]
+    },
+    "UserDirectoryEntry": {
+      "title": "UserDirectoryEntry",
+      "description": "Directory entry keyed by normalized email hash/slug for bilateral sharing handshake.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user who owns this directory entry.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Normalized lowercase email address.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "name": {
+          "type": "string",
+          "description": "Public display name for family invitations.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "avatarColor": {
+          "type": "string",
+          "description": "Hex color for avatar badge.",
+          "minLength": 4,
+          "maxLength": 16
+        },
+        "connectionsJson": {
+          "type": "string",
+          "description": "Serialized sharing connections for bilateral reconciliation.",
+          "minLength": 2,
+          "maxLength": 200000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["ownerId", "email", "name", "avatarColor", "connectionsJson", "createdAt", "updatedAt"]
+    },
+    "WorkspaceSlice": {
+      "title": "WorkspaceSlice",
+      "description": "A private or shared module workspace slice containing household calendar, shopping, todos, notes, recipes, budget, and photos.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the creator of the workspace slice.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "memberEmails": {
+          "type": "array",
+          "description": "Bounded list of up to 10 normalized member email addresses permitted to access this workspace.",
+          "maxLength": 10
+        },
+        "version": {
+          "type": "number",
+          "description": "Monotonically increasing sync version number."
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "Display name of the member who last updated the workspace.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "lastActionType": {
+          "type": "string",
+          "description": "Category of the most recent change.",
+          "enum": ["calendar", "todo", "shopping", "photos", "sync"],
+          "minLength": 3,
+          "maxLength": 20
+        },
+        "lastActionSummary": {
+          "type": "string",
+          "description": "Human-readable summary of the most recent change.",
+          "minLength": 0,
+          "maxLength": 300
+        },
+        "sliceJson": {
+          "type": "string",
+          "description": "Serialized workspace slice data bounded under Firestore 1MB limit.",
+          "minLength": 2,
+          "maxLength": 900000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the workspace was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the workspace was last updated."
+        }
+      },
+      "required": [
+        "ownerId",
+        "memberEmails",
+        "version",
+        "updatedBy",
+        "lastActionType",
+        "lastActionSummary",
+        "sliceJson",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Strictly private user profile document accessible only by the authenticated owner (userId == request.auth.uid)."
+    },
+    "/userDirectory/{directoryId}": {
+      "schema": { "$ref": "#/entities/UserDirectoryEntry" },
+      "description": "Single-document lookup directory keyed by sanitized email ID for bilateral family connection handshakes."
+    },
+    "/workspaces/{workspaceId}": {
+      "schema": { "$ref": "#/entities/WorkspaceSlice" },
+      "description": "Private (`priv_<id>`) or shared (`shared_<id>`) workspace slices accessible only by the owner or explicitly listed memberEmails."
+    }
+  }
+}
